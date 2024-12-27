@@ -11,7 +11,7 @@
 #include "ram.h"
 #include "pcb.h"
 #include "architecture_state.h"
-#include <pthread.h>
+
 
 // Inclua após todas as estruturas serem definidas
 #include "instruction_utils.h"

@@ -546,6 +546,20 @@ type_of_instruction cpu_decode(cpu* cpu, char* instruction, unsigned short int n
     return type;
 }
 
+type_of_instruction instruc_decode(cpu* cpu, char* instruction, unsigned short int num_instruction) {
+    core* current_core = get_current_core(cpu);
+    if (current_core == NULL) {
+        return INVALID;
+    }
+
+    lock_core(current_core);
+    type_of_instruction type = verify_instruction(instruction, num_instruction);
+    unlock_core(current_core);
+
+    return type;
+}
+
+
 // Funções de gerenciamento de processos
 void assign_process_to_core(cpu* cpu, PCB* process, int core_id) {
     if (core_id < 0 || core_id >= NUM_CORES) {
@@ -595,17 +609,9 @@ bool check_quantum_expired(cpu* cpu, int core_id) {
         return false;
     }
     
-    lock_core(&cpu->core[core_id]);
-    core* current_core = &cpu->core[core_id];
-    bool expired = false;
-    
-    if (current_core->current_process != NULL) {
-        current_core->quantum_remaining--;
-        expired = current_core->quantum_remaining <= 0;
-    }
-    
-    unlock_core(current_core);
-    return expired;
+    core* current_core = &cpu->core[core_id];    
+    return current_core->current_process != NULL && 
+           current_core->quantum_remaining <= 0;
 }
 
 void handle_preemption(cpu* cpu, int core_id) {

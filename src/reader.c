@@ -26,23 +26,45 @@ char* read_program(const char *filename) {
     return program;  
 }
 
-char* get_line_of_program(char *program, int line_number) {
-
-    char* program_copy = strdup(program); 
-
-    char *line = strtok(program_copy, "\n"); 
-    for (int i = 0; i < line_number; i++) {
-        if (line != NULL) {
-            line = strtok(NULL, "\n");  
-        } else {
-            free(program_copy);
-            return NULL;  
-        }
+char* get_line_of_program(char *program, int base_line) {
+    if (!program) {
+        printf("Error: Null program pointer\n");
+        return NULL;
     }
 
-    char* line_copy = strdup(line);
-    free(program_copy);
-    return line_copy;  
+    // Avança até a posição base
+    program += base_line;
+
+    // Encontra o início da próxima linha não vazia
+    while (*program && isspace(*program)) {
+        program++;
+    }
+
+    if (!*program) {
+        return NULL;
+    }
+
+    // Encontra o fim da linha
+    char* line_end = program;
+    while (*line_end && *line_end != '\n') {
+        line_end++;
+    }
+
+    // Calcula o tamanho da linha
+    size_t line_length = line_end - program;
+
+    // Aloca espaço para a linha + terminador nulo
+    char* line = (char*)malloc(line_length + 1);
+    if (!line) {
+        printf("Error: Memory allocation failed\n");
+        return NULL;
+    }
+
+    // Copia a linha
+    strncpy(line, program, line_length);
+    line[line_length] = '\0';
+
+    return line;
 }
 
 unsigned short int count_lines(char *program) {

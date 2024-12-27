@@ -128,20 +128,19 @@ type_of_instruction instruction_decode(cpu* cpu, char* instruction, unsigned sho
 
 void check_pipeline_preemption(pipeline* p, cpu* cpu) {
     int core_id = p->current_core;
+    core* current_core = &cpu->core[core_id];
     
-    if (check_quantum_expired(cpu, core_id)) {
-        // Limpa o pipeline
-        reset_pipeline_stage(&p->IF);
-        reset_pipeline_stage(&p->ID);
-        reset_pipeline_stage(&p->EX);
-        reset_pipeline_stage(&p->MEM);
-        reset_pipeline_stage(&p->WB);
+    if (!current_core->is_available || current_core->current_process == NULL) return;
+    
+    if (current_core->quantum_remaining <= 0) {
+        PCB* current_process = current_core->current_process;
+        printf("Process %d quantum expired on core %d\n", current_process->pid, core_id);
         
-        // Realiza a preempção
-        handle_preemption(cpu, core_id);
-        
-        // Seleciona próximo core/processo
-        // Implementar lógica de escalonamento aqui
+        lock_scheduler(cpu);
+        current_process->state = READY;
+        cpu->process_manager->ready_queue[cpu->process_manager->ready_count++] = current_process;
+        release_core(cpu, core_id);
+        unlock_scheduler(cpu);
     }
 }
 

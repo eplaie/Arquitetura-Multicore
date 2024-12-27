@@ -23,56 +23,60 @@ void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, peripherals
     cpu->process_manager = state->process_manager;
 }
 
-void init_pipeline_multicore(architecture_state* state, cpu* cpu, ram* memory_ram __attribute__((unused))) {
+void init_pipeline_multicore(architecture_state* state, cpu* cpu __attribute__((unused)), 
+                           ram* memory_ram __attribute__((unused))) {
     state->pipeline->current_core = 0;
-    
-    // Cria processo inicial
-    PCB* initial_process = create_process(cpu->process_manager);
-    initial_process->base_address = 0;
-    initial_process->memory_limit = NUM_MEMORY;
-    
-    // Atribui processo ao primeiro core
-    assign_process_to_core(cpu, initial_process, 0);
-
     printf("Pipeline initialized with multicore support\n");
 }
 
 void execute_pipeline_cycle(architecture_state* state, cpu* cpu, ram* memory_ram, int core_id) {
-
     check_pipeline_preemption(state->pipeline, cpu);
+
+    core* current_core = &cpu->core[core_id];
+    PCB* current_process = current_core->current_process;
     
-    if (!cpu->core[core_id].is_available || cpu->core[core_id].current_process == NULL) {
+    if (!current_core->is_available || !current_process) {
         return;
     }
 
-    // Estágio IF
-    char* instruction = instruction_fetch(cpu, memory_ram, core_id);
-    if (instruction == NULL) return;
-
-    // Estágio ID
-    type_of_instruction type = instruction_decode(cpu, instruction, cpu->core[core_id].PC);
-
-    // Prepara dados do pipe
-    instruction_pipe pipe_data = {
-        .instruction = instruction,
-        .type = type,
-        .mem_ram = memory_ram,
-        .num_instruction = cpu->core[core_id].PC,
-        .loop = false,
-        .has_if = false,
-        .valid_if = false,
-        .running_if = false
-    };
-
-    // Executa estágios
-    execute(cpu, &pipe_data, core_id);
-    memory_access(cpu, memory_ram, type, instruction, core_id);
-    write_back(cpu, type, instruction, pipe_data.result, core_id);
-
-    // Atualiza o quantum do processo atual
-    if (cpu->core[core_id].current_process) {
-        cpu->core[core_id].quantum_remaining--;
+    if (current_process->PC >= current_process->memory_limit) {
+        printf("Process %d completed\n", current_process->pid);
+        release_core(cpu, core_id);
+        return;
     }
+
+    char* instruction = get_line_of_program(memory_ram->vector + current_process->base_address, 
+                                          current_process->PC);
+    if (!instruction) {
+        release_core(cpu, core_id);
+        return;
+    }
+
+    // Executa a instrução
+    type_of_instruction type = verify_instruction(instruction, current_process->PC);
+    instruction_pipe pipe_data = {0};
+    pipe_data.instruction = instruction;
+    pipe_data.type = type;
+    pipe_data.mem_ram = memory_ram;
+    pipe_data.num_instruction = current_process->PC;
+
+    printf("Core %d: Executing '%s'\n", core_id, instruction);
+    control_unit(cpu, &pipe_data);
+    
+    current_core->quantum_remaining--;
+    current_process->PC++;
+
+    // Verifica quantum
+    if (current_core->quantum_remaining <= 0) {
+        printf("Process %d quantum expired\n", current_process->pid);
+        current_process->state = READY;
+        lock_scheduler(cpu);
+        cpu->process_manager->ready_queue[cpu->process_manager->ready_count++] = current_process;
+        release_core(cpu, core_id);
+        unlock_scheduler(cpu);
+    }
+
+    free(instruction);
 }
 
 void load_program_on_ram(ram* memory_ram, char* program) {
