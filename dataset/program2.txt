@@ -1,0 +1,6 @@
+// programa2.txt - Programa curto com I/O
+LOAD A0 50
+STORE A0 A200
+LOAD B0 25
+ADD A0 B0
+STORE A0 A300

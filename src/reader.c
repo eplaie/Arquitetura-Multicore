@@ -1,6 +1,6 @@
 #include "reader.h"
 
-char* read_program(char *filename) {
+char* read_program(const char *filename) {
     FILE *arq = fopen(filename, "r"); 
     if (arq == NULL) {
         printf("error opening file\n");

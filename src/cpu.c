@@ -1,6 +1,19 @@
 #include "cpu.h"
-
 #include "pipeline.h"
+#include <unistd.h>
+
+// Função auxiliar para identificar o core atual
+static core* get_current_core(cpu* cpu) {
+    for (int i = 0; i < NUM_CORES; i++) {
+        lock_core(&cpu->core[i]);
+        if (!cpu->core[i].is_available && cpu->core[i].current_process != NULL) {
+            unlock_core(&cpu->core[i]);
+            return &cpu->core[i];
+        }
+        unlock_core(&cpu->core[i]);
+    }
+    return NULL;
+}
 
 void init_cpu(cpu* cpu) {
     cpu->core = malloc(NUM_CORES * sizeof(core));
@@ -9,22 +22,69 @@ void init_cpu(cpu* cpu) {
         exit(1);
     }
 
+    // Inicializa mutex do escalonador
+    pthread_mutex_init(&cpu->scheduler_mutex, NULL);
+
     for (unsigned short int i = 0; i < NUM_CORES; i++) {
         cpu->core[i].registers = malloc(NUM_REGISTERS * sizeof(unsigned short int));
         if (cpu->core[i].registers == NULL) {
             printf("memory allocation failed in cpu->core[%d].registers\n", i);
             exit(1);
         }
-        cpu->core[i].PC = 0;  
+        
+        // Inicializa dados básicos
+        cpu->core[i].PC = 0;
+        cpu->core[i].current_process = NULL;
+        cpu->core[i].is_available = true;
+        cpu->core[i].quantum_remaining = 0;
+        cpu->core[i].running = false;
+        
+        // Inicializa mutex do core
+        pthread_mutex_init(&cpu->core[i].mutex, NULL);
+        
         for (unsigned short int j = 0; j < NUM_REGISTERS; j++) {
             cpu->core[i].registers[j] = 0;
         }
     }
 }
 
+void init_cpu_with_process_manager(cpu* cpu, int quantum_size) {
+    init_cpu(cpu);
+    cpu->process_manager = init_process_manager(quantum_size);
+}
 
-void control_unit(cpu* cpu, pipe* p) {
+// Funções de sincronização
+void lock_core(core* c) {
+    pthread_mutex_lock(&c->mutex);
+}
+
+void unlock_core(core* c) {
+    pthread_mutex_unlock(&c->mutex);
+}
+
+void lock_scheduler(cpu* cpu) {
+    pthread_mutex_lock(&cpu->scheduler_mutex);
+}
+
+void unlock_scheduler(cpu* cpu) {
+    pthread_mutex_unlock(&cpu->scheduler_mutex);
+}
+
+void control_unit(cpu* cpu, instruction_pipe* p) {
+    core* current_core = get_current_core(cpu);
+    if (current_core == NULL) {
+        printf("Error: No active core found for control unit\n");
+        return;
+    }
+
+    // Verifica se o quantum expirou antes de executar a instrução
+    if (check_quantum_expired(cpu, current_core - cpu->core)) {
+        handle_preemption(cpu, current_core - cpu->core);
+        return;
+    }
+
     p->result = 0;
+    lock_core(current_core);
 
     if (p->type == ADD) {
         p->result = add(cpu, p->instruction);
@@ -44,152 +104,112 @@ void control_unit(cpu* cpu, pipe* p) {
     } else if (p->type == L_END) {
         loop_end(cpu, p);
     } else if(p->type == IF) {
-        if_i(cpu,p);
+        if_i(cpu, p);
         p->num_instruction++;
     } else if(p->type == I_END) {
         if_end(p);
         p->num_instruction++;
     } else if(p->type == ELSE) {
-        else_i(cpu,p);
+        else_i(cpu, p);
         p->num_instruction++;
     } else if(p->type == ELS_END) {
         else_end(p);
         p->num_instruction++;
-    }
-    else {
+    } else {
         p->num_instruction++;
     }
+
+    unlock_core(current_core);
 }
 
-
-unsigned short int ula(unsigned short int operating_a, unsigned short int operating_b, type_of_instruction operation) {
-    switch(operation) {
-        case ADD:
-            return operating_a + operating_b;
-
-        case SUB:
-            return operating_a - operating_b;
-
-        case MUL:
-            return operating_a * operating_b; 
-
-        case DIV:
-            if (operating_b == 0) {
-                printf("Error: Division by zero.\n");
-                return 0; 
-            }
-            return operating_a / operating_b;
-
-        default:
-            printf("Error: Invalid operation.\n");
-            return 0;
-    }
-}
-
-unsigned short int get_register_index(char* reg_name) {
-    char* register_names[] = {
-        "A0", "B0", "C0", "D0", "E0", "F0", "G0", "H0",
-        "I0", "J0", "K0", "L0", "M0", "N0", "O0", "P0",
-        "A1", "B1", "C1", "D1", "E1", "F1", "G1", "H1",
-        "I1", "J1", "K1", "L1", "M1", "N1", "O1", "P1"
-    };
-    
-    for (int i = 0; i < NUM_REGISTERS; i++) {
-        if (strcmp(reg_name, register_names[i]) == 0) {
-            return i;
-        }
-    }
-    
-    printf("Error: Invalid register name.\n");
-    return 0;
-}
-
-unsigned short int verify_address(ram* memory_ram, char* address, unsigned short int num_positions) {
-    unsigned short int address_without_a;
-    
-    address_without_a = atoi(address + 1);  
-
-    if (address_without_a + num_positions > NUM_MEMORY) {
-        printf("Error: Invalid memory address - out of bounds.\n");
-        exit(1);
+// Operações básicas adaptadas para multicore
+void load(cpu* cpu, char* instruction) {
+    core* current_core = get_current_core(cpu);
+    if (current_core == NULL) {
+        printf("Error: No active core found for load operation\n");
+        return;
     }
 
-    for (unsigned short int i = 0; i < num_positions; i++) {
-        if (memory_ram->vector[address_without_a + i] != '\0') {
-            printf("Error: Invalid memory address - position %d is already occupied.\n", address_without_a + i);
-            exit(1);
-        }
-    }
-
-    return address_without_a; 
-}
-
-void load (cpu* cpu, char* instruction) {
-
-    char *instruction_copy, *token, *register_name;
+    lock_core(current_core);
+    char *instruction_copy = strdup(instruction);
+    char *token, *register_name;
     unsigned short int value;
 
-    instruction_copy = strdup(instruction);
-
-    token = strtok(instruction_copy, " "); 
-
+    token = strtok(instruction_copy, " ");
     if (strcmp(token, "LOAD") != 0) {
         printf("Error: Invalid instruction\n");
+        free(instruction_copy);
+        unlock_core(current_core);
         exit(1);
     }
 
     token = strtok(NULL, " ");
-
     register_name = token;
 
     token = strtok(NULL, " ");
     value = atoi(token);
 
-    cpu->core[0].registers[get_register_index(register_name)] = value;
+    current_core->registers[get_register_index(register_name)] = value;
+    
+    free(instruction_copy);
+    unlock_core(current_core);
 }
 
-void store (cpu* cpu, ram* memory_ram, char* instruction) {
-    char *instruction_copy, *token, *register_name1, *memory_address;
-    char buffer[10]; 
+void store(cpu* cpu, ram* memory_ram, char* instruction) {
+    core* current_core = get_current_core(cpu);
+    if (current_core == NULL) {
+        printf("Error: No active core found for store operation\n");
+        return;
+    }
+
+    lock_core(current_core);
+    char *instruction_copy = strdup(instruction);
+    char *token, *register_name1, *memory_address;
+    char buffer[10];
     unsigned short int address, num_positions;
 
-    instruction_copy = strdup(instruction);
-
-    token = strtok(instruction_copy, " "); 
-
+    token = strtok(instruction_copy, " ");
     if (strcmp(token, "STORE") != 0) {
         printf("Error: Invalid instruction\n");
+        free(instruction_copy);
+        unlock_core(current_core);
         exit(1);
     }
-    token = strtok(NULL, " ");
 
+    token = strtok(NULL, " ");
     register_name1 = token;
 
     token = strtok(NULL, " ");
-   
     memory_address = token;
 
-    unsigned short int register_value = cpu->core[0].registers[get_register_index(register_name1)];
-
-    sprintf(buffer, "%d", register_value);  
-
-    num_positions = strlen(buffer); 
-
+    unsigned short int register_value = current_core->registers[get_register_index(register_name1)];
+    sprintf(buffer, "%d", register_value);
+    num_positions = strlen(buffer);
     address = verify_address(memory_ram, memory_address, num_positions);
 
     strcpy(&memory_ram->vector[address], buffer);
+    
+    free(instruction_copy);
+    unlock_core(current_core);
 }
-
+// Operações aritméticas adaptadas para multicore
 unsigned short int add(cpu* cpu, char* instruction) {
-    char *instruction_copy, *token,*register_name1, *register_name2;
-    unsigned short int value;
+    core* current_core = get_current_core(cpu);
+    if (current_core == NULL) {
+        printf("Error: No active core found for add operation\n");
+        return 0;
+    }
 
-    instruction_copy = strdup(instruction);
+    lock_core(current_core);
+    char *instruction_copy = strdup(instruction);
+    char *token, *register_name1, *register_name2;
+    unsigned short int value, result;
 
-    token = strtok(instruction_copy, " "); 
-
+    token = strtok(instruction_copy, " ");
     if (strcmp(token, "ADD") != 0) {
         printf("Error: Invalid instruction\n");
+        free(instruction_copy);
+        unlock_core(current_core);
         exit(1);
     }
 
@@ -197,31 +217,38 @@ unsigned short int add(cpu* cpu, char* instruction) {
     register_name1 = token;
 
     token = strtok(NULL, " ");
-    unsigned short int result;
-
     if (isdigit(token[0])) {
         value = atoi(token);
-        result = ula(cpu->core[0].registers[get_register_index(register_name1)], value, ADD);
+        result = ula(current_core->registers[get_register_index(register_name1)], value, ADD);
     } else {
         register_name2 = token;
-        result = ula(cpu->core[0].registers[get_register_index(register_name1)], 
-                     cpu->core[0].registers[get_register_index(register_name2)], 
-                     ADD);
+        result = ula(current_core->registers[get_register_index(register_name1)],
+                    current_core->registers[get_register_index(register_name2)],
+                    ADD);
     }
 
-    return result; 
+    free(instruction_copy);
+    unlock_core(current_core);
+    return result;
 }
 
 unsigned short int sub(cpu* cpu, char* instruction) {
-    char *instruction_copy, *token, *register_name1, *register_name2;
-    unsigned short int value;
+    core* current_core = get_current_core(cpu);
+    if (current_core == NULL) {
+        printf("Error: No active core found for sub operation\n");
+        return 0;
+    }
 
-    instruction_copy = strdup(instruction);
+    lock_core(current_core);
+    char *instruction_copy = strdup(instruction);
+    char *token, *register_name1, *register_name2;
+    unsigned short int value, result;
 
-    token = strtok(instruction_copy, " "); 
-
+    token = strtok(instruction_copy, " ");
     if (strcmp(token, "SUB") != 0) {
         printf("Error: Invalid instruction\n");
+        free(instruction_copy);
+        unlock_core(current_core);
         exit(1);
     }
 
@@ -229,31 +256,38 @@ unsigned short int sub(cpu* cpu, char* instruction) {
     register_name1 = token;
 
     token = strtok(NULL, " ");
-    unsigned short int result;
-
     if (isdigit(token[0])) {
         value = atoi(token);
-        result = ula(cpu->core[0].registers[get_register_index(register_name1)], value, SUB);
+        result = ula(current_core->registers[get_register_index(register_name1)], value, SUB);
     } else {
         register_name2 = token;
-        result = ula(cpu->core[0].registers[get_register_index(register_name1)], 
-                     cpu->core[0].registers[get_register_index(register_name2)], 
-                     SUB);
+        result = ula(current_core->registers[get_register_index(register_name1)],
+                    current_core->registers[get_register_index(register_name2)],
+                    SUB);
     }
 
-    return result; 
+    free(instruction_copy);
+    unlock_core(current_core);
+    return result;
 }
 
 unsigned short int mul(cpu* cpu, char* instruction) {
-    char *instruction_copy, *token, *register_name1, *register_name2;
-    unsigned short int value;
+    core* current_core = get_current_core(cpu);
+    if (current_core == NULL) {
+        printf("Error: No active core found for mul operation\n");
+        return 0;
+    }
 
-    instruction_copy = strdup(instruction);
+    lock_core(current_core);
+    char *instruction_copy = strdup(instruction);
+    char *token, *register_name1, *register_name2;
+    unsigned short int value, result;
 
-    token = strtok(instruction_copy, " "); 
-
+    token = strtok(instruction_copy, " ");
     if (strcmp(token, "MUL") != 0) {
         printf("Error: Invalid instruction\n");
+        free(instruction_copy);
+        unlock_core(current_core);
         exit(1);
     }
 
@@ -261,31 +295,38 @@ unsigned short int mul(cpu* cpu, char* instruction) {
     register_name1 = token;
 
     token = strtok(NULL, " ");
-    unsigned short int result;
-
     if (isdigit(token[0])) {
         value = atoi(token);
-        result = ula(cpu->core[0].registers[get_register_index(register_name1)], value, MUL);
+        result = ula(current_core->registers[get_register_index(register_name1)], value, MUL);
     } else {
         register_name2 = token;
-        result = ula(cpu->core[0].registers[get_register_index(register_name1)], 
-                     cpu->core[0].registers[get_register_index(register_name2)], 
-                     MUL);
+        result = ula(current_core->registers[get_register_index(register_name1)],
+                    current_core->registers[get_register_index(register_name2)],
+                    MUL);
     }
 
-    return result; 
+    free(instruction_copy);
+    unlock_core(current_core);
+    return result;
 }
 
 unsigned short int div_c(cpu* cpu, char* instruction) {
-    char *instruction_copy, *token, *register_name1, *register_name2;
-    unsigned short int value;
+    core* current_core = get_current_core(cpu);
+    if (current_core == NULL) {
+        printf("Error: No active core found for div operation\n");
+        return 0;
+    }
 
-    instruction_copy = strdup(instruction);
+    lock_core(current_core);
+    char *instruction_copy = strdup(instruction);
+    char *token, *register_name1, *register_name2;
+    unsigned short int value, result;
 
-    token = strtok(instruction_copy, " "); 
-
+    token = strtok(instruction_copy, " ");
     if (strcmp(token, "DIV") != 0) {
         printf("Error: Invalid instruction\n");
+        free(instruction_copy);
+        unlock_core(current_core);
         exit(1);
     }
 
@@ -293,34 +334,42 @@ unsigned short int div_c(cpu* cpu, char* instruction) {
     register_name1 = token;
 
     token = strtok(NULL, " ");
-    unsigned short int result;
-
     if (isdigit(token[0])) {
         value = atoi(token);
-        result = ula(cpu->core[0].registers[get_register_index(register_name1)], value, DIV);
+        result = ula(current_core->registers[get_register_index(register_name1)], value, DIV);
     } else {
         register_name2 = token;
-        result = ula(cpu->core[0].registers[get_register_index(register_name1)], 
-                     cpu->core[0].registers[get_register_index(register_name2)], 
-                     DIV);
+        result = ula(current_core->registers[get_register_index(register_name1)],
+                    current_core->registers[get_register_index(register_name2)],
+                    DIV);
     }
 
-    return result;  
+    free(instruction_copy);
+    unlock_core(current_core);
+    return result;
 }
+void if_i(cpu* cpu, instruction_pipe* p) {
+    core* current_core = get_current_core(cpu);
+    if (current_core == NULL) {
+        printf("Error: No active core found for if operation\n");
+        return;
+    }
 
-void if_i(cpu* cpu, pipe* p) {
+    lock_core(current_core);
     char *instruction_copy = strdup(p->instruction);
     char *token = strtok(instruction_copy, " ");
     p->has_if = true;
 
     if (strcmp(token, "IF") != 0) {
         printf("Error: Invalid instruction\n");
+        free(instruction_copy);
+        unlock_core(current_core);
         exit(1);
     }
 
     token = strtok(NULL, " ");
     unsigned short int register1_value = get_register_index(token);
-    register1_value = cpu->core[0].registers[register1_value];
+    register1_value = current_core->registers[register1_value];
 
     token = strtok(NULL, " ");
     const char *operator = token;
@@ -330,7 +379,7 @@ void if_i(cpu* cpu, pipe* p) {
     if (isdigit(token[0])) {
         operand_value = atoi(token);
     } else {
-        operand_value = get_register_index(token);
+        operand_value = current_core->registers[get_register_index(token)];
     }
 
     int result = 0;
@@ -347,22 +396,23 @@ void if_i(cpu* cpu, pipe* p) {
     } else if (strcmp(operator, "<") == 0) {
         result = register1_value < operand_value;
     } else {
-        printf("Error: Invalid operator. Line %hd.\n",p->num_instruction + 1);
+        printf("Error: Invalid operator. Line %hd.\n", p->num_instruction + 1);
     }
 
     if (result == 0) {
         p->valid_if = false;
         while (1) {
             p->num_instruction++;
-            p->instruction = instruc_fetch(cpu, p->mem_ram);
-
-            p->type = instruc_decode(p->instruction, p->num_instruction);
+            p->instruction = cpu_fetch(cpu, p->mem_ram);
+            p->type = cpu_decode(cpu, p->instruction, p->num_instruction);
 
             instruction_copy = strdup(p->instruction);
             token = strtok(instruction_copy, " "); 
 
             if (strcmp(token, "I_END") == 0)
                 break;
+
+            free(instruction_copy);
         }
     } else {
         p->valid_if = true;
@@ -370,81 +420,26 @@ void if_i(cpu* cpu, pipe* p) {
     }
 
     free(instruction_copy);
+    unlock_core(current_core);
 }
 
-void if_end(pipe* p) {
-    char *instruction_copy, *token;
-
-    instruction_copy = strdup(p->instruction);
-
-    token = strtok(instruction_copy, " "); 
-
-    if (strcmp(token, "I_END") != 0) {
-        printf("Error: Invalid instruction\n");
-        exit(1);
+void loop(cpu* cpu, instruction_pipe* p) {
+    core* current_core = get_current_core(cpu);
+    if (current_core == NULL) {
+        printf("Error: No active core found for loop operation\n");
+        return;
     }
 
-    p->running_if = false;
-}
-
-void else_i(cpu* cpu, pipe* p) {
+    lock_core(current_core);
     char *instruction_copy = strdup(p->instruction);
-    char *token = strtok(instruction_copy, " ");
-
-    if (strcmp(token, "ELSE") != 0) {
-        printf("Error: Invalid instruction\n");
-        exit(1);
-    }
-
-    if (p->has_if && !p->valid_if) {
-        p->has_if = false;
-    }
-    else if (p->running_if) {
-        printf("Error: Invalid instruction\n");
-        exit(1);
-    }
-    else if (!p->has_if) {
-        printf("Error: Invalid instruction. No IF before ELSE. Line %hd.\n",p->num_instruction + 1);
-        exit(1);
-    }
-    else if (p->has_if && p->valid_if) {
-        while (1) {
-            p->num_instruction++;
-            p->instruction = instruc_fetch(cpu, p->mem_ram);
-
-            p->type = instruc_decode(p->instruction, p->num_instruction);
-            instruction_copy = strdup(p->instruction);
-            token = strtok(instruction_copy, " "); 
-
-            if (strcmp(token, "ELS_END") == 0)
-                break;
-        }
-    }
-    free(instruction_copy);
-}
-
-void else_end(pipe* p) {
-    char *instruction_copy = strdup(p->instruction);
-    char *token = strtok(instruction_copy, " ");
-
-    if (strcmp(token, "ELS_END") != 0) {
-        printf("Error: Invalid instruction\n");
-        exit(1);
-    }
-
-    p->has_if = false;
-}
-
-void loop(cpu* cpu, pipe* p) {
-    char *instruction_copy, *token, *register_name;
+    char *token, *register_name;
     unsigned short int value;
 
-    instruction_copy = strdup(p->instruction);
-
-    token = strtok(instruction_copy, " "); 
-
+    token = strtok(instruction_copy, " ");
     if (strcmp(token, "LOOP") != 0) {
         printf("Error: Invalid instruction\n");
+        free(instruction_copy);
+        unlock_core(current_core);
         exit(1);
     }
 
@@ -453,33 +448,46 @@ void loop(cpu* cpu, pipe* p) {
         if (isdigit(token[0])) {
             value = atoi(token);
             if (value == 0) {
-                printf("Error: Loop value can't be 0. Line %hd.\n",p->num_instruction + 1);
+                printf("Error: Loop value can't be 0. Line %hd.\n", p->num_instruction + 1);
+                free(instruction_copy);
+                unlock_core(current_core);
                 exit(1);
             }
         } else {
             register_name = token;
-            value = cpu->core[0].registers[get_register_index(register_name)];
+            value = current_core->registers[get_register_index(register_name)];
             if (value == 0) {
-                printf("Error: Loop value can't be 0. Line %hd.\n",p->num_instruction + 1);
+                printf("Error: Loop value can't be 0. Line %hd.\n", p->num_instruction + 1);
+                free(instruction_copy);
+                unlock_core(current_core);
                 exit(1);
             }
-
         }
         p->loop_value = value;
         p->loop_start = p->num_instruction;
         p->loop = true;
     }
+
+    free(instruction_copy);
+    unlock_core(current_core);
 }
 
-void loop_end(cpu* cpu, pipe* p) {
-    char *instruction_copy, *token;
+void loop_end(cpu* cpu, instruction_pipe* p) {
+    core* current_core = get_current_core(cpu);
+    if (current_core == NULL) {
+        printf("Error: No active core found for loop end operation\n");
+        return;
+    }
 
-    instruction_copy = strdup(p->instruction);
+    lock_core(current_core);
+    char *instruction_copy = strdup(p->instruction);
+    char *token;
 
-    token = strtok(instruction_copy, " "); 
-
+    token = strtok(instruction_copy, " ");
     if (strcmp(token, "L_END") != 0) {
-        printf("Error: Invalid instruction.\n");
+        printf("Error: Invalid instruction\n");
+        free(instruction_copy);
+        unlock_core(current_core);
         exit(1);
     }
 
@@ -489,32 +497,235 @@ void loop_end(cpu* cpu, pipe* p) {
         p->loop = false;
         p->loop_start = 0;
         p->num_instruction++;
-    }
-    else {
-        for (int i=0; i<decrease; i++) {
-            decrease_pc(cpu);
+    } else {
+        for (int i = 0; i < decrease; i++) {
+            current_core->PC--;
         }
         p->num_instruction = p->loop_start;
     }
-}
 
+    free(instruction_copy);
+    unlock_core(current_core);
+}
 void decrease_pc(cpu* cpu) {
-    cpu->core[0].PC--;
+    core* current_core = get_current_core(cpu);
+    if (current_core != NULL) {
+        lock_core(current_core);
+        current_core->PC--;
+        unlock_core(current_core);
+    }
 }
 
-char* instruc_fetch(cpu* cpu, ram* memory) {
-    char* instruction = get_line_of_program(memory->vector, cpu->core[0].PC);
-    cpu->core[0].PC++;
+char* cpu_fetch(cpu* cpu, ram* memory) {
+    core* current_core = get_current_core(cpu);
+    if (current_core == NULL) {
+        return NULL;
+    }
+
+    lock_core(current_core);
+    char* instruction = get_line_of_program(memory->vector, current_core->PC);
+    current_core->PC++;
+    unlock_core(current_core);
 
     return instruction;
 }
 
-type_of_instruction instruc_decode(char* instruction, unsigned short int num_instruction) {
+type_of_instruction cpu_decode(cpu* cpu, char* instruction, unsigned short int num_instruction) {
+    core* current_core = get_current_core(cpu);
+    if (current_core == NULL) {
+        return INVALID;
+    }
+
+    lock_core(current_core);
     type_of_instruction type = verify_instruction(instruction, num_instruction);
+    unlock_core(current_core);
 
     if (type == INVALID) {
         exit(1);    
-    } else {
-        return type;
+    }
+    return type;
+}
+
+// Funções de gerenciamento de processos
+void assign_process_to_core(cpu* cpu, PCB* process, int core_id) {
+    if (core_id < 0 || core_id >= NUM_CORES) {
+        printf("Invalid core ID\n");
+        return;
+    }
+    
+    lock_core(&cpu->core[core_id]);
+    if (!cpu->core[core_id].is_available) {
+        printf("Core %d is not available\n", core_id);
+        unlock_core(&cpu->core[core_id]);
+        return;
+    }
+    
+    cpu->core[core_id].current_process = process;
+    cpu->core[core_id].is_available = false;
+    cpu->core[core_id].quantum_remaining = cpu->process_manager->quantum_size;
+    
+    restore_context(process, &cpu->core[core_id]);
+    
+    process->state = RUNNING;
+    process->core_id = core_id;
+    unlock_core(&cpu->core[core_id]);
+}
+
+void release_core(cpu* cpu, int core_id) {
+    if (core_id < 0 || core_id >= NUM_CORES) {
+        printf("Invalid core ID\n");
+        return;
+    }
+    
+    lock_core(&cpu->core[core_id]);
+    core* current_core = &cpu->core[core_id];
+    if (current_core->current_process != NULL) {
+        save_context(current_core->current_process, current_core);
+        current_core->current_process->state = READY;
+        current_core->current_process->core_id = -1;
+        current_core->current_process = NULL;
+        current_core->is_available = true;
+        current_core->quantum_remaining = 0;
+    }
+    unlock_core(current_core);
+}
+
+bool check_quantum_expired(cpu* cpu, int core_id) {
+    if (core_id < 0 || core_id >= NUM_CORES) {
+        return false;
+    }
+    
+    lock_core(&cpu->core[core_id]);
+    core* current_core = &cpu->core[core_id];
+    bool expired = false;
+    
+    if (current_core->current_process != NULL) {
+        current_core->quantum_remaining--;
+        expired = current_core->quantum_remaining <= 0;
+    }
+    
+    unlock_core(current_core);
+    return expired;
+}
+
+void handle_preemption(cpu* cpu, int core_id) {
+    if (core_id < 0 || core_id >= NUM_CORES) {
+        return;
+    }
+    
+    lock_scheduler(cpu);
+    lock_core(&cpu->core[core_id]);
+    
+    core* current_core = &cpu->core[core_id];
+    if (current_core->current_process != NULL) {
+        PCB* current_process = current_core->current_process;
+        release_core(cpu, core_id);
+        current_process->state = READY;
+        cpu->process_manager->ready_queue[cpu->process_manager->ready_count++] = current_process;
+    }
+    
+    unlock_core(current_core);
+    unlock_scheduler(cpu);
+}
+
+// Thread principal de execução do core
+void* core_execution_thread(void* arg) {
+    core_thread_args* args = (core_thread_args*)arg;
+    cpu* cpu = args->cpu;
+    ram* memory_ram = args->memory_ram;
+    int core_id = args->core_id;
+    core* current_core = &cpu->core[core_id];
+
+    printf("Core %d thread started\n", core_id);
+
+    while (current_core->running) {
+        lock_core(current_core);
+
+        if (!current_core->is_available && current_core->current_process != NULL) {
+            if (check_quantum_expired(cpu, core_id)) {
+                handle_preemption(cpu, core_id);
+                unlock_core(current_core);
+                continue;
+            }
+
+            instruction_pipe pipe_data = {0};
+            char* instruction = cpu_fetch(cpu, memory_ram);
+            
+            if (instruction != NULL) {
+                pipe_data.instruction = instruction;
+                pipe_data.type = cpu_decode(cpu, instruction, current_core->PC);
+                pipe_data.mem_ram = memory_ram;
+                pipe_data.num_instruction = current_core->PC;
+
+                control_unit(cpu, &pipe_data);
+
+                printf("Core %d executed instruction at PC %d (Quantum: %d)\n",
+                       core_id, current_core->PC - 1, current_core->quantum_remaining);
+            } else {
+                current_core->current_process->state = READY;
+                current_core->is_available = true;
+                current_core->current_process = NULL;
+            }
+        }
+
+        unlock_core(current_core);
+        usleep(1000);
+    }
+
+    printf("Core %d thread finished\n", core_id);
+    free(arg);
+    return NULL;
+}
+// Inicialização das threads dos cores
+void init_cpu_threads(cpu* cpu, ram* memory_ram, architecture_state* state) {
+    // Inicializa mutex do escalonador
+    pthread_mutex_init(&cpu->scheduler_mutex, NULL);
+
+    for (int i = 0; i < NUM_CORES; i++) {
+        // Inicializa mutex do core
+        pthread_mutex_init(&cpu->core[i].mutex, NULL);
+        cpu->core[i].running = true;
+
+        // Prepara argumentos para a thread
+        core_thread_args* args = malloc(sizeof(core_thread_args));
+        if (args == NULL) {
+            printf("Failed to allocate thread arguments for core %d\n", i);
+            exit(1);
+        }
+
+        args->cpu = cpu;
+        args->memory_ram = memory_ram;
+        args->core_id = i;
+        args->state = state;
+
+        // Cria a thread
+        int result = pthread_create(&cpu->core[i].thread, 
+                                  NULL, 
+                                  core_execution_thread, 
+                                  args);
+        if (result != 0) {
+            printf("Failed to create thread for core %d\n", i);
+            exit(1);
+        }
+
+        printf("Created thread for core %d\n", i);
     }
 }
+
+// Limpeza das threads
+void cleanup_cpu_threads(cpu* cpu) {
+    for (int i = 0; i < NUM_CORES; i++) {
+        // Sinaliza para a thread parar
+        cpu->core[i].running = false;
+        
+        // Espera a thread terminar
+        pthread_join(cpu->core[i].thread, NULL);
+        
+        // Destroi o mutex do core
+        pthread_mutex_destroy(&cpu->core[i].mutex);
+    }
+
+    // Destroi o mutex do escalonador
+    pthread_mutex_destroy(&cpu->scheduler_mutex);
+}
+

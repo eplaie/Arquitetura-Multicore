@@ -1,0 +1,7 @@
+// programa3.txt - Programa com loop menor
+LOAD A0 10
+LOAD B0 2
+LOOP A0
+    MUL B0 2
+L_END
+STORE B0 A400
