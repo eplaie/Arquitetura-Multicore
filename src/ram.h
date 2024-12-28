@@ -11,5 +11,6 @@ typedef struct ram {
 
 void init_ram(ram* memory);
 void print_ram(ram* memory);
+void print_ram_segment(ram* memory, int start, int length);
 
 #endif 

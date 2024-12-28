@@ -4,14 +4,19 @@
 #include "common_types.h"
 
 typedef enum {
+    NEW,
     READY,
     RUNNING,
-    BLOCKED
-} ProcessState;
+    BLOCKED,
+    FINISHED
+} process_state;
+
+// Function prototype for state to string conversion
+const char* state_to_string(process_state state);
 
 struct PCB {
     int pid;
-    ProcessState state;
+    process_state state; 
     int priority;
     unsigned short int PC;
     unsigned short int *registers;
@@ -35,6 +40,7 @@ struct ProcessManager {
 // Function declarations
 ProcessManager* init_process_manager(int quantum_size);
 PCB* create_process(ProcessManager* pm);
+void set_process_base_address(PCB* pcb, int base_address);
 void schedule_process(ProcessManager* pm, cpu* cpu);
 void schedule_next_process(cpu* cpu, int core_id);
 void save_context(PCB* pcb, core* core);

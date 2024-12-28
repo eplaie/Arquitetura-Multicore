@@ -77,6 +77,16 @@ void control_unit(cpu* cpu, instruction_pipe* p) {
         return;
     }
 
+    printf("Debug - Executing instruction: '%s' (Type: %d)\n", p->instruction, p->type);
+
+    if (p->type == LOAD) {
+        load(cpu, p->instruction);
+        printf("Debug - LOAD executed\n");
+    } else if (p->type == STORE) {
+        store(cpu, p->mem_ram, p->instruction);
+        printf("Debug - STORE executed\n");
+    }
+
     // Verifica se o quantum expirou antes de executar a instrução
     if (check_quantum_expired(cpu, current_core - cpu->core)) {
         handle_preemption(cpu, current_core - cpu->core);
@@ -559,8 +569,6 @@ type_of_instruction instruc_decode(cpu* cpu, char* instruction, unsigned short i
     return type;
 }
 
-
-// Funções de gerenciamento de processos
 void assign_process_to_core(cpu* cpu, PCB* process, int core_id) {
     if (core_id < 0 || core_id >= NUM_CORES) {
         printf("Invalid core ID\n");
@@ -574,17 +582,28 @@ void assign_process_to_core(cpu* cpu, PCB* process, int core_id) {
         return;
     }
     
+    printf("Assigning Process %d to Core %d (Previous State: %s)\n", 
+           process->pid, core_id, state_to_string(process->state));
+    
     cpu->core[core_id].current_process = process;
     cpu->core[core_id].is_available = false;
     cpu->core[core_id].quantum_remaining = cpu->process_manager->quantum_size;
     
-    restore_context(process, &cpu->core[core_id]);
+    // O PC do core começa do 0, pois é relativo ao processo
+    cpu->core[core_id].PC = 0;
+    process->PC = 0;
     
     process->state = RUNNING;
     process->core_id = core_id;
+    
+    printf("Process %d now RUNNING on Core %d with quantum %d\n", 
+           process->pid, core_id, cpu->core[core_id].quantum_remaining);
+    
     unlock_core(&cpu->core[core_id]);
 }
 
+
+// Enhanced process release
 void release_core(cpu* cpu, int core_id) {
     if (core_id < 0 || core_id >= NUM_CORES) {
         printf("Invalid core ID\n");
@@ -594,14 +613,39 @@ void release_core(cpu* cpu, int core_id) {
     lock_core(&cpu->core[core_id]);
     core* current_core = &cpu->core[core_id];
     if (current_core->current_process != NULL) {
+        // Detailed state transition logging
+        printf("Releasing Core %d - Process %d changing state\n", 
+               core_id, current_core->current_process->pid);
+        
         save_context(current_core->current_process, current_core);
-        current_core->current_process->state = READY;
+        
+        // Detailed state tracking
+        if (current_core->current_process->PC >= current_core->current_process->memory_limit) {
+            current_core->current_process->state = FINISHED;
+            printf("Process %d FINISHED\n", current_core->current_process->pid);
+        } else {
+            current_core->current_process->state = READY;
+            printf("Process %d moved to READY state\n", current_core->current_process->pid);
+        }
+        
         current_core->current_process->core_id = -1;
         current_core->current_process = NULL;
         current_core->is_available = true;
         current_core->quantum_remaining = 0;
     }
     unlock_core(current_core);
+}
+
+// Helper function to convert state to string (for logging)
+const char* state_to_string(process_state state) {
+    switch(state) {
+        case NEW: return "NEW";
+        case READY: return "READY";
+        case RUNNING: return "RUNNING";
+        case BLOCKED: return "BLOCKED";
+        case FINISHED: return "FINISHED";
+        default: return "UNKNOWN";
+    }
 }
 
 bool check_quantum_expired(cpu* cpu, int core_id) {

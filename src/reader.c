@@ -26,44 +26,53 @@ char* read_program(const char *filename) {
     return program;  
 }
 
-char* get_line_of_program(char *program, int base_line) {
-    if (!program) {
-        printf("Error: Null program pointer\n");
+char* get_line_of_program(char* program_start, int line_number) {
+    if (!program_start) {
+        printf("Debug - Null program pointer\n");
         return NULL;
     }
-
-    // Avança até a posição base
-    program += base_line;
-
-    // Encontra o início da próxima linha não vazia
-    while (*program && isspace(*program)) {
-        program++;
+    
+    printf("Debug - Fetching line %d from program\n", line_number);
+    
+    // Encontra início desta linha
+    char* current = program_start;
+    int current_line = 0;
+    
+    while (current_line < line_number) {
+        // Verifica se chegou ao fim do programa
+        if (*current == '\0') {
+            printf("Debug - End of program at line %d\n", current_line);
+            return NULL;
+        }
+        
+        // Conta nova linha
+        if (*current == '\n') {
+            current_line++;
+        }
+        current++;
     }
-
-    if (!*program) {
-        return NULL;
+    
+    // Encontra fim da linha atual
+    char* line_end = strchr(current, '\n');
+    if (!line_end) {
+        line_end = current + strlen(current);
     }
-
-    // Encontra o fim da linha
-    char* line_end = program;
-    while (*line_end && *line_end != '\n') {
-        line_end++;
-    }
-
-    // Calcula o tamanho da linha
-    size_t line_length = line_end - program;
-
-    // Aloca espaço para a linha + terminador nulo
-    char* line = (char*)malloc(line_length + 1);
-    if (!line) {
-        printf("Error: Memory allocation failed\n");
-        return NULL;
-    }
-
+    
     // Copia a linha
-    strncpy(line, program, line_length);
-    line[line_length] = '\0';
-
+    size_t line_len = line_end - current;
+    char* line = malloc(line_len + 1);
+    if (!line) return NULL;
+    
+    strncpy(line, current, line_len);
+    line[line_len] = '\0';
+    
+    // Remove espaços em branco no final
+    while (line_len > 0 && isspace(line[line_len - 1])) {
+        line[line_len - 1] = '\0';
+        line_len--;
+    }
+    
+    printf("Debug - Found line: '%s'\n", line);
     return line;
 }
 

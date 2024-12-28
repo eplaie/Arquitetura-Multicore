@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 #define DEFAULT_QUANTUM 4
-#define BASE_ADDRESS_OFFSET 3
+#define BASE_ADDRESS_OFFSET 0
 #define MAX_CYCLES 3
 #define SLEEP_INTERVAL 10000  // Reduzido para 10ms
 
@@ -14,71 +14,88 @@ typedef struct {
     int print_interval;
 } SystemConfig;
 
-void load_test_program(ram* memory_ram, PCB* process, const char* filename, int base_address) {
+
+int load_test_program(ram* memory_ram, PCB* process, const char* filename) {
     printf("\nAttempting to read file: %s\n", filename);
     
     char* program = read_program(filename);
-    if (program == NULL) {
+    if (!program) {
         printf("Error: Could not read program file '%s'\n", filename);
+        return -1;
+    }
+
+    printf("Program to load:\n%s", program);
+    
+    // Encontra próximo espaço livre
+    int free_space = 0;
+    while (memory_ram->vector[free_space] != '\0') {
+        free_space++;
+    }
+    
+    // Copia programa
+    size_t len = strlen(program);
+    memcpy(memory_ram->vector + free_space, program, len);
+    memory_ram->vector[free_space + len] = '\0';
+    
+    // Conta instruções
+    int num_instructions = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (program[i] == '\n') num_instructions++;
+    }
+    if (program[len-1] != '\n') num_instructions++;
+    
+    // Armazena informações do programa
+    programs[num_programs].start = memory_ram->vector + free_space;
+    programs[num_programs].length = len;
+    programs[num_programs].num_lines = num_instructions;
+    
+    // Configura PCB
+    process->base_address = num_programs;  // Usa índice do programa como base_address
+    process->PC = 0;
+    process->memory_limit = num_instructions;
+    
+    printf("Program %d loaded at position %d with %d instructions\n", 
+           num_programs, free_space, num_instructions);
+    
+    char* first_instr = get_line_of_program(programs[num_programs].start, 0);
+    if (first_instr) {
+        printf("First instruction: '%s'\n", first_instr);
+        free(first_instr);
+    }
+
+    num_programs++;
+    free(program);
+    return free_space;
+}
+
+// E modifique execute_pipeline_cycle:
+void execute_pipeline_cycle(architecture_state* state __attribute__((unused)), 
+                          cpu* cpu, ram* memory_ram __attribute__((unused)), int core_id) {
+    core* current_core = &cpu->core[core_id];
+    PCB* current_process = current_core->current_process;
+    
+    if (!current_core->is_available || !current_process) {
         return;
     }
 
-    // Mantém os espaços, apenas remove linhas vazias extras
-    char cleaned_program[1024] = {0};
-    int clean_index = 0;
-    int line_count = 0;
-
-    char* line_start = program;
-    char* current = program;
-
-    while (*current) {
-        if (*current == '\n') {
-            // Se não é uma linha vazia, copia
-            if (current > line_start) {
-                int line_length = current - line_start;
-                memcpy(cleaned_program + clean_index, line_start, line_length);
-                clean_index += line_length;
-                cleaned_program[clean_index++] = '\n';
-                line_count++;
-            }
-            line_start = current + 1;
-        }
-        current++;
+    if (current_process->PC >= current_process->memory_limit) {
+        printf("Process %d completed\n", current_process->pid);
+        current_process->state = FINISHED;
+        release_core(cpu, core_id);
+        return;
     }
 
-    // Trata a última linha se existir
-    if (current > line_start) {
-        int line_length = current - line_start;
-        memcpy(cleaned_program + clean_index, line_start, line_length);
-        clean_index += line_length;
-        cleaned_program[clean_index++] = '\n';
-        line_count++;
-    }
-
-    printf("Program content (%d bytes, %d lines):\n%s", 
-           clean_index, line_count, cleaned_program);
+    // Usa o programa correto baseado no índice
+    char* instruction = get_line_of_program(
+        programs[current_process->base_address].start, 
+        current_process->PC
+    );
     
-    // Copia para a memória
-    for (unsigned short int i = 0; i < clean_index; i++) {
-        memory_ram->vector[base_address + i] = cleaned_program[i];
+    if (!instruction) {
+        printf("Error: Could not fetch instruction for process %d\n", current_process->pid);
+        release_core(cpu, core_id);
+        return;
     }
-
-    process->base_address = base_address;
-    process->memory_limit = clean_index;
-    
-    printf("Loaded program at base address %d with %d bytes\n", 
-           base_address, clean_index);
-           
-    char* first_instruction = get_line_of_program(memory_ram->vector + base_address, 0);
-    if (first_instruction) {
-        printf("First instruction: '%s'\n", first_instruction);
-        free(first_instruction);
-    } else {
-        printf("Error: Could not read first instruction\n");
-    }
-    
-    free(program);
-}
 
 void print_system_state(architecture_state* state __attribute__((unused)), 
                        cpu* cpu, ram* memory_ram, int cycle_count) {
@@ -127,9 +144,10 @@ void load_all_programs(cpu* cpu, ram* memory_ram, SystemConfig* config) {
     for (int i = 0; i < config->num_programs; i++) {
         PCB* process = create_process(cpu->process_manager);
         if (process != NULL) {
-            int base_address = i * BASE_ADDRESS_OFFSET;
-            load_test_program(memory_ram, process, config->program_files[i], base_address);
-            printf("Created process %d with base address %d\n", process->pid, base_address);
+            int base_addr = load_test_program(memory_ram, process, config->program_files[i]);
+            if (base_addr >= 0) {
+                set_process_base_address(process, base_addr);
+            }
         }
     }
 }
@@ -224,6 +242,6 @@ int main() {
         printf("Execution completed after %d cycles\n", cycle_count);
     }
 
-    free_architecture(cpu, memory_ram, memory_disc, peripherals, arch_state);
+    // free_architecture(cpu, memory_ram, memory_disc, peripherals, arch_state);
     return 0;
 }

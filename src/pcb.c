@@ -40,8 +40,8 @@ PCB* create_process(ProcessManager* pm) {
     pcb->core_id = -1;
     pcb->quantum = pm->quantum_size;
     pcb->has_io = false;
-    pcb->base_address = 0;  // Será definido durante o carregamento
-    pcb->memory_limit = 0;  // Será definido durante o carregamento
+    pcb->base_address = 0;  // Será atualizado depois
+    pcb->memory_limit = 0;  // Será atualizado depois
     
     pcb->registers = (unsigned short int*)malloc(NUM_REGISTERS * sizeof(unsigned short int));
     if (!pcb->registers) {
@@ -52,15 +52,23 @@ PCB* create_process(ProcessManager* pm) {
     memset(pcb->registers, 0, NUM_REGISTERS * sizeof(unsigned short int));
     
     pm->ready_queue[pm->ready_count++] = pcb;
+    
     return pcb;
 }
 
+void set_process_base_address(PCB* pcb, int base_address) {
+    pcb->base_address = base_address;
+    printf("Updated process %d with base address %d\n", pcb->pid, base_address);
+}
+
 void save_context(PCB* pcb, core* cur_core) {
+    // Salva PC relativo (não o endereço base)
     pcb->PC = cur_core->PC;
     memcpy(pcb->registers, cur_core->registers, NUM_REGISTERS * sizeof(unsigned short int));
 }
 
 void restore_context(PCB* pcb, core* cur_core) {
+    // Restaura PC relativo
     cur_core->PC = pcb->PC;
     memcpy(cur_core->registers, pcb->registers, NUM_REGISTERS * sizeof(unsigned short int));
 }

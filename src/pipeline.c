@@ -134,33 +134,55 @@ void check_pipeline_preemption(pipeline* p, cpu* cpu) {
     
     if (current_core->quantum_remaining <= 0) {
         PCB* current_process = current_core->current_process;
-        printf("Process %d quantum expired on core %d\n", current_process->pid, core_id);
+        
+        printf("Pipeline Preemption: Process %d quantum expired on core %d\n", 
+               current_process->pid, core_id);
         
         lock_scheduler(cpu);
+        
+        // Detailed state transition
         current_process->state = READY;
+        printf("Process %d moved from RUNNING to READY state\n", current_process->pid);
+        
+        // Add process back to ready queue
         cpu->process_manager->ready_queue[cpu->process_manager->ready_count++] = current_process;
+        
+        // Release the core
         release_core(cpu, core_id);
+        
         unlock_scheduler(cpu);
+        
+        // Reset pipeline stages to prepare for next context
+        reset_pipeline_stage(&p->IF);
+        reset_pipeline_stage(&p->ID);
+        reset_pipeline_stage(&p->EX);
+        reset_pipeline_stage(&p->MEM);
+        reset_pipeline_stage(&p->WB);
     }
 }
 
+// Enhanced pipeline context switching
 void switch_pipeline_context(pipeline* p, cpu* cpu, int new_core_id) {
     if (new_core_id < 0 || new_core_id >= NUM_CORES) {
+        printf("Invalid core ID for context switch\n");
         return;
     }
     
-    // Salva contexto do core atual se necessário
+    // Save context of current core if needed
     if (p->current_core >= 0 && p->current_core < NUM_CORES) {
         core* current_core = &cpu->core[p->current_core];
         if (current_core->current_process) {
+            printf("Saving context for Process %d on Core %d\n", 
+                   current_core->current_process->pid, p->current_core);
             save_context(current_core->current_process, current_core);
         }
     }
     
-    // Muda para o novo core
+    // Switch to new core
+    printf("Switching pipeline context to Core %d\n", new_core_id);
     p->current_core = new_core_id;
     
-    // Limpa pipeline para novo contexto
+    // Clear pipeline stages for new context
     reset_pipeline_stage(&p->IF);
     reset_pipeline_stage(&p->ID);
     reset_pipeline_stage(&p->EX);

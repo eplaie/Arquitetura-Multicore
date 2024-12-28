@@ -22,3 +22,15 @@ void print_ram(ram* memory_ram) {
         }
     }
 }
+
+void print_ram_segment(ram* memory_ram, int start, int length) {
+    printf("RAM segment from %d to %d:\n", start, start + length - 1);
+    for (int i = start; i < start + length && i < NUM_MEMORY; i++) {
+        if (memory_ram->vector[i] == '\0') {
+            printf("_");
+        } else {
+            printf("%c", memory_ram->vector[i]);
+        }
+    }
+    printf("\n");
+}

@@ -22,58 +22,6 @@
 
  <div align="justify">
 
-## Introdução
-
-O objetivo deste projeto é desenvolver um sistema operacional simplificado utilizando a linguagem C, que se caracteriza por seu baixo nível de abstração e alto controle sobre os recursos de hardware. Este trabalho acadêmico, proposto pelo professor <a href="https://github.com/mpiress" target="_blank">Michel Pires</a> (CEFET/MG), foi realizado para oferecer uma compreensão dos conceitos fundamentais de sistemas operacionais, como gerenciamento de processos, controle de memória e interação com dispositivos de entrada e saída. A escolha da linguagem C permite uma experiência prática de como os sistemas operacionais gerenciam diretamente os recursos de hardware, proporcionando uma visão detalhada da arquitetura de computadores.
-
-
- ## Arquitetura de Von Neumann
-Também conhecida como Modelo de Princeton, a Arquitetura de von Neumann tem seu elemento principal na possibilidade dos dados serem executados e armazenados de maneira uniforme. Em outras palavras, o sistema deve conseguir realizar todo o seu processo de cálculos harmonicamente por meio do envio e recebimento de dados e instruções.
-
-#### Unidade Central de Processamento (CPU)
-Popularmente conhecida como processador, a CPU é o componente primordial de todo computador, pois é o responsável direto pelo cálculo, interpretação e execução das demandas em uma máquina. Em seu interior, a Arquitetura de von Neumann elenca três subdivisões importantes para seu funcionamento:
-
-##### Unidade Lógica e Aritmética (ULA): 
-É o segmento que realiza as operações matemáticas da CPU, como uma calculadora embutida nesse componente;
-
-##### Unidade de Controle:
-A unidade de controle tem como missão garantir que todos os processos sejam executados corretamente e de maneira organizada;
-
-##### Registradores:
-Para armazenar temporariamente dados durante operações, a ULA possui registradores internos. Esses registradores são pequenas áreas de armazenamento de alta velocidade que permitem que a ULA realize suas operações de maneira eficiente.
-
-#### Memória
-A memória é um componente crucial na arquitetura de Von Neumann, sendo o local onde dados e instruções são armazenados para serem utilizados durante a execução de programas. Na concepção de Von Neumann, a memória é um recurso unificado, armazenando tanto as instruções do programa quanto os dados manipulados por essas instruções.
-Uma característica fundamental da arquitetura de Von Neumann é a coexistência de instruções e dados na mesma memória. Isso significa que as instruções do programa e os dados são armazenados de maneira intercalada, possibilitando a flexibilidade na execução de diferentes tarefas.Durante o ciclo de instrução, a Unidade de Controle coordena o acesso à memória para buscar instruções e dados necessários à execução. A memória fornece essas informações para a Unidade de Controle, que as encaminha para a Unidade Lógica e Aritmética ou outros componentes, conforme necessário.
-
-##### Memória Principal (RAM):
-Responsável por armazenar dados temporários e instruções em uso durante a execução do programa. A RAM é volátil, ou seja, perde seu conteúdo quando a energia é desligada.
-
-##### Memória Secundária (Armazenamento):
-Utilizada para armazenar dados de forma persistente, mesmo quando o computador está desligado. Exemplos incluem discos rígidos (HDDs) e unidades de estado sólido (SSDs).
-
-
-##### Hierarquia de Memória:
-
-Os sistemas modernos muitas vezes implementam uma hierarquia de memória para otimizar o desempenho. Caches de alta velocidade são utilizados para armazenar temporariamente dados frequentemente acessados, reduzindo a necessidade de acessar a memória principal mais lenta.
-
-#### Unidade de Entrada/Saída (E/S)
-Os dispositivos de input e output são os periféricos usados em um computador, ou seja, todo equipamento externo que usamos para controlar a máquina. O mouse, teclado...
-
-##### Simulação da Arquitetura de Von Neumann utilizando o ADD
-<p align="center">
-<img src="./imgs/gif1.gif" width="700"/> 
-</p>
-
-## Pipeline MIPS
-
-O pipeline simulado deve possuir quatro estágios:
-
-* Busca de instrução: a busca de instrução é responsável por buscar a próxima instrução da memória de instruções, a próxima instrução é referenciada pelo valor do contador de programa (PC). A instução buscada deve ser colocada no registrador IR e o valor de PC deve ser atualizada para a instrução seguinte.
-* Decodificação: a decodificação é responsável por determinar a operação da instrução, seus operandos fontes e destino e se existe a necessidade de (A, B ...) por causa da dependência de dados.
-* Execução: a execução realiza a operação e o resultado é mantido temporariamente dentro do próprio pipeline por enquanto.
-* Escrita de resultado: a última etapa escreve o resultado da etapa de execução de volta no registrador de destino, seja uma operação aritmética ou um salto, ou na memória, se for um store. Com exceção da etapa de execução, todas as outras etapas demoram um ciclo de clock para completar suas tarefas.
-
 
 ## Estrutura do Projeto
 
@@ -161,106 +109,7 @@ O pipeline simulado deve possuir quatro estágios:
 
 
 
- #### Simulação
-A tabela abaixo fornece uma visão detalhada de cada instrução utilizada no exemplo de entrada. Para cada instrução, são especificados o propósito e o efeito no sistema. Isso permite uma compreensão clara das operações e facilita a análise do fluxo de execução do programa.
 
-Cada instrução é responsável por realizar uma operação específica sobre os registradores e/ou posições de memória, permitindo a manipulação de dados conforme a lógica do programa. Abaixo estão os detalhes das instruções
-
-| Instrução       | Descrição                                                                                       |
-|-----------------|-------------------------------------------------------------------------------------------------|
-| `LOAD A0 10`    | Carrega o valor `10` no registrador `A0`.                                                       |
-| `LOAD B0 5`     | Carrega o valor `5` no registrador `B0`.                                                        |
-| `LOAD C0 6`     | Carrega o valor `6` no registrador `C0`.                                                        |
-| `LOAD D0 1`     | Carrega o valor `1` no registrador `D0`.                                                        |
-| `ADD A0 B0`     | Soma o valor de `A0` com o valor de `B0` e armazena o resultado em `A0`.                        |
-| `ADD C0 A0`     | Soma o valor de `C0` com o valor atualizado de `A0` e armazena o resultado em `C0`.             |
-| `STORE C0 A189` | Armazena o valor de `C0` na posição de memória `A189`.                                          |
-| `LOOP A0`       | Inicia um laço que executa as instruções internas enquanto `A0` for diferente de zero.         |
-| `ADD C0 10`     | Adiciona o valor `10` ao registrador `C0`.                                                      |
-| `L_END`         | Marca o final do bloco de loop.                                                                 |
-| `IF D0 == 1`    | Executa o bloco `IF` se o valor de `D0` for igual a `1`.                                       |
-| `ADD D0 3`      | Adiciona `3` ao valor do registrador `D0`.                                                      |
-| `SUB A0 1`      | Subtrai `1` do valor do registrador `A0`.                                                       |
-| `I_END`         | Marca o final do bloco `IF`.                                                                    |
-| `ELSE`          | Executa um bloco alternativo se a condição `IF` não for satisfeita.                             |
-| `ELS_END`       | Marca o final do bloco `ELSE`.                                                                  |
-                                        
-
-Para um melhor entendimento será apresentado uma breve descrição do funcionamento do Programa
-
-* 1- Inicialização:
-   *  A função principal em (src/main.c) é o ponto de entrada do programa. Ela inicializa todos os componentes da arquitetura do sistema, incluindo a CPU, RAM, disco e periféricos.
-   *  O programa lê um arquivo de entrada (dataset/program.txt) que contém as instruções a serem executadas.
-
-* 2- Leitura do Programa:
-O arquivo é processado por funções implementadas em src/reader.c, onde:
-   *  read_program lê o conteúdo do arquivo e o armazena.
-   *  count_lines conta o número total de linhas no programa.
-   *  get_line_of_program extrai linhas específicas do programa para execução.
-
-*  3- Carregamento na RAM:
-   *  O programa é carregado na RAM usando a estrutura definida em src/ram.c.
-   *  O conteúdo da RAM é inicializado.
-
-*  4- Pipeline de Execução:   
-O programa entra em um loop de execução:
-   *  Busca a instrução na RAM.
-   *  Decodifica a instrução.
-   *  Executa a operação.
-   *  Acessa a memória, se necessário.
-   *  Escreve os resultados de volta.
-
-
-### Saída do Programa
-
-A saída mostra, para cada instrução, o tipo, o resultado, e os valores dos registradores e memória envolvidos. Esse detalhamento permite a análise passo a passo do fluxo de execução.
-
-- **Number of Instructions**: Mostra a quantidade total de instruções executadas.
-- **Instruction**: Lista as instruções sequenciais e suas operações.
-- **Type of Instruction**: Indica o tipo da operação executada (e.g., LOAD, ADD, LOOP, IF, etc.).
-- **Result**: Exibe o resultado da operação, seja no registrador, na memória, ou uma verificação de condição.
-- **Register/Memory Update**: Exibe os valores atualizados após a execução de operações como `ADD`, `SUB`, `STORE`, etc.
-
-#### Exemplo de Saída:
-
-```plaintext
-Number of instructions: 18
-Instruction 0: LOAD A0 10
-Type of instruction: 0
-Result: 0
-Register A0: 10
-Instruction 1: LOAD B0 5
-Type of instruction: 0
-Result: 0
-Register B0: 5
-Instruction 2: LOAD C0 6
-Type of instruction: 0
-Result: 0
-Register C0: 6
-Instruction 3: LOAD D0 1
-Type of instruction: 0
-Result: 0
-Register D0: 1
-Instruction 4: ADD A0 B0
-Type of instruction: 2
-Result: 15
-WB: Register A0: 15
-Instruction 5: ADD C0 A0
-Type of instruction: 2
-Result: 21
-WB: Register C0: 21
-Instruction 6: STORE C0 A189
-Type of instruction: 1
-Result: 0
-Memory address 189: 21
-Instruction 7: LOOP A0
-Type of instruction: 8
-Result: 0
-...
-Instruction 17: ELS_END
-Type of instruction: 11
-Result: 0
-```
 
 ## Compilação e Execução
 
@@ -286,19 +135,9 @@ TANENBAUM, A. S.; AUSTIN, T. Structured Computer Organization. [S.l.], 2012. 800
 [![Gmail][gmail-badge]][gmail-autor]
 </div>
 
-<div align="center">
-   <i>RAFAEL AUGUSTO CAMPOS MOREIRA Engenharia de Computação @ CEFET-MG</i>
-<br><br>
 
-[![Gmail][gmail-badge]][gmail-autor2]
-</div>
 
-<div align="center">
-   <i>VICTOR RAMOS DE ALBUQUERQUE CABRAL Engenharia de Computação @ CEFET-MG</i>
-<br><br>
 
-[![Gmail][gmail-badge]][gmail-autor3]
-</div>
 
 <div align="center">
    <i> YGOR SANTOS VIEIRA Engenharia de Computação @ CEFET-MG</i>
@@ -309,12 +148,6 @@ TANENBAUM, A. S.; AUSTIN, T. Structured Computer Organization. [S.l.], 2012. 800
 
 [gmail-badge]: https://img.shields.io/badge/-Gmail-D14836?style=for-the-badge&logo=Gmail&logoColor=white
 [gmail-autor]: joaoeletricgl@outlook.com
-
-[gmail-badge]: https://img.shields.io/badge/-Gmail-D14836?style=for-the-badge&logo=Gmail&logoColor=white
-[gmail-autor2]:camposrafa806@gmail.com
-
-[gmail-badge]: https://img.shields.io/badge/-Gmail-D14836?style=for-the-badge&logo=Gmail&logoColor=white
-[gmail-autor3]:vramoscabral2020@gmail.com
 
 [gmail-badge]: https://img.shields.io/badge/-Gmail-D14836?style=for-the-badge&logo=Gmail&logoColor=white
 [gmail-autor4]:ygorvieira111@gmail.com

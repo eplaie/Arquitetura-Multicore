@@ -29,9 +29,8 @@ void init_pipeline_multicore(architecture_state* state, cpu* cpu __attribute__((
     printf("Pipeline initialized with multicore support\n");
 }
 
-void execute_pipeline_cycle(architecture_state* state, cpu* cpu, ram* memory_ram, int core_id) {
-    check_pipeline_preemption(state->pipeline, cpu);
-
+void execute_pipeline_cycle(architecture_state* state __attribute__((unused)), 
+                          cpu* cpu, ram* memory_ram, int core_id) {
     core* current_core = &cpu->core[core_id];
     PCB* current_process = current_core->current_process;
     
@@ -39,36 +38,53 @@ void execute_pipeline_cycle(architecture_state* state, cpu* cpu, ram* memory_ram
         return;
     }
 
+    printf("\nDebug - Pipeline cycle for process %d on core %d\n", 
+           current_process->pid, core_id);
+    
     if (current_process->PC >= current_process->memory_limit) {
         printf("Process %d completed\n", current_process->pid);
+        current_process->state = FINISHED;
         release_core(cpu, core_id);
         return;
     }
 
-    char* instruction = get_line_of_program(memory_ram->vector + current_process->base_address, 
-                                          current_process->PC);
+    // Busca instrução usando PC relativo (não o endereço absoluto)
+    char* instruction = get_line_of_program(
+        memory_ram->vector + current_process->base_address, // Endereço base do programa
+        current_process->PC  // PC relativo (0, 1, 2, etc.)
+    );
+    
     if (!instruction) {
+        printf("Error: Could not fetch instruction for process %d (PC=%d, Base=%d)\n", 
+               current_process->pid, current_process->PC, current_process->base_address);
         release_core(cpu, core_id);
         return;
     }
 
-    // Executa a instrução
+    // Executa instrução
     type_of_instruction type = verify_instruction(instruction, current_process->PC);
+    
+    printf("Core %d executing process %d:\n", core_id, current_process->pid);
+    printf("  PC: %d\n", current_process->PC);
+    printf("  Base Address: %d\n", current_process->base_address);
+    printf("  Memory Limit: %d\n", current_process->memory_limit);
+    printf("  Quantum Remaining: %d\n", current_core->quantum_remaining);
+    printf("  Executing: %s\n", instruction);
+
     instruction_pipe pipe_data = {0};
-    pipe_data.instruction = instruction;
+    pipe_data.instruction = strdup(instruction);
     pipe_data.type = type;
     pipe_data.mem_ram = memory_ram;
     pipe_data.num_instruction = current_process->PC;
 
-    printf("Core %d: Executing '%s'\n", core_id, instruction);
+    // Executa e atualiza contadores
     control_unit(cpu, &pipe_data);
-    
     current_core->quantum_remaining--;
     current_process->PC++;
 
     // Verifica quantum
     if (current_core->quantum_remaining <= 0) {
-        printf("Process %d quantum expired\n", current_process->pid);
+        printf("Process %d quantum expired on Core %d\n", current_process->pid, core_id);
         current_process->state = READY;
         lock_scheduler(cpu);
         cpu->process_manager->ready_queue[cpu->process_manager->ready_count++] = current_process;
@@ -76,20 +92,100 @@ void execute_pipeline_cycle(architecture_state* state, cpu* cpu, ram* memory_ram
         unlock_scheduler(cpu);
     }
 
+    free(pipe_data.instruction);
     free(instruction);
 }
 
-void load_program_on_ram(ram* memory_ram, char* program) {
-    unsigned short int num_caracters = strlen(program);
+void print_execution_summary(architecture_state* state, cpu* cpu) {
+    printf("\n=== Execution Summary ===\n");
+    
+    // Contadores de estados
+    int total_processes = 0;
+    int completed = 0;
+    int ready = 0;
+    int blocked = 0;
+    int running = 0;
+    
+    // Verifica processos na fila de prontos
+    for (int i = 0; i < state->process_manager->ready_count; i++) {
+        PCB* process = state->process_manager->ready_queue[i];
+        total_processes++;
+        if (process->state == READY) ready++;
+    }
+    
+    // Verifica processos bloqueados
+    for (int i = 0; i < state->process_manager->blocked_count; i++) {
+        PCB* process = state->process_manager->blocked_queue[i];
+        total_processes++;
+        if (process->state == BLOCKED) blocked++;
+    }
+    
+    // Verifica processos nos cores
+    for (int i = 0; i < NUM_CORES; i++) {
+        PCB* process = cpu->core[i].current_process;
+        if (process) {
+            total_processes++;
+            if (process->state == FINISHED) completed++;
+            else if (process->state == RUNNING) running++;
+        }
+    }
+    
+    printf("Total Processes: %d\n", total_processes);
+    printf("Completed Processes: %d\n", completed);
+    printf("Ready Processes: %d\n", ready);
+    printf("Running Processes: %d\n", running);
+    printf("Blocked Processes: %d\n", blocked);
+    
+    // Estatísticas por processo
+    printf("\nPer-Process Statistics:\n");
+    for (int i = 0; i < NUM_CORES; i++) {
+        PCB* process = cpu->core[i].current_process;
+        if (process) {
+            printf("Process %d:\n", process->pid);
+            printf("  State: %s\n", state_to_string(process->state));
+            printf("  Core: %d\n", process->core_id);
+            printf("  PC: %d\n", process->PC);
+            printf("  Instructions Executed: %d\n", process->PC);
+        }
+    }
+}
 
-    if (num_caracters >= NUM_MEMORY) {
-        printf("Error: Program size exceeds RAM capacity.\n");
+void load_program_on_ram(ram* memory_ram, char* program, int base_address) {
+    if (!program || !memory_ram->vector) return;
+    
+    size_t program_len = strlen(program);
+    printf("Debug - Loading program of length %zu at base %d\n", program_len, base_address);
+    
+    // Verifica limites de memória
+    if (base_address + program_len >= NUM_MEMORY) {
+        printf("Error: Program would exceed RAM capacity\n");
         exit(1);
     }
-
-    for (unsigned short int i = 0; i < num_caracters; i++) {
-        memory_ram->vector[i] = program[i];
+    
+    // Limpa área de destino
+    size_t clear_size = program_len + 1;
+    memset(memory_ram->vector + base_address, 0, clear_size);
+    
+    // Copia programa
+    memcpy(memory_ram->vector + base_address, program, program_len);
+    memory_ram->vector[base_address + program_len] = '\0';
+    
+    // Verifica conteúdo carregado
+    printf("Debug - Verifying loaded content at base %d:\n", base_address);
+    char* first_line = get_line_of_program(memory_ram->vector + base_address, 0);
+    if (first_line) {
+        printf("First instruction: '%s'\n", first_line);
+        free(first_line);
     }
+    
+    // Conta número de linhas
+    int num_lines = 0;
+    char* p = memory_ram->vector + base_address;
+    while (*p) {
+        if (*p == '\n') num_lines++;
+        p++;
+    }
+    printf("Program loaded with %d instructions\n", num_lines + 1);
 }
 
 void check_instructions_on_ram(ram* memory_ram) {
