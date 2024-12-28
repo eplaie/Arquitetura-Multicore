@@ -1,7 +1,5 @@
 <h1 align="center">
-    <a>
-        <img alt="Banner" title="#Banner" style="object-fit: fill; width: 961px, height:200px;" src="./imgs/logo.png"/>
-    </a>
+
 </h1>
 <div style="display: inline-block;">
 <img align="center" height="20px" width="90px" src="https://img.shields.io/badge/c-%2300599C.svg?style=for-the-badge&logo=c&logoColor=white"/> 
