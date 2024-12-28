@@ -23,18 +23,23 @@ char* instruction_fetch(cpu* cpu, ram* memory, int core_id) {
     }
 
     core* current_core = &cpu->core[core_id];
-    if (!current_core->is_available || current_core->current_process == NULL) {
+    PCB* current_process = current_core->current_process;
+    
+    if (!current_core->is_available || !current_process) {
         return NULL;
     }
 
-    // Verifica quantum antes de buscar instrução
+    // Verifica quantum
     if (check_quantum_expired(cpu, core_id)) {
         handle_preemption(cpu, core_id);
         return NULL;
     }
 
-    char* instruction = get_line_of_program(memory->vector, current_core->PC);
-    current_core->PC++;
+    // Usa o endereço base do processo + PC
+    char* instruction = get_line_of_program(
+        memory->vector + current_process->base_address,
+        current_process->PC
+    );
 
     return instruction;
 }

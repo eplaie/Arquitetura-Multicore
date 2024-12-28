@@ -37,6 +37,16 @@ struct ProcessManager {
     int quantum_size;
 };
 
+// Estrutura para gerenciar informações dos programas em memória
+typedef struct {
+    char* start;       // Início do programa na memória
+    int length;        // Tamanho do programa
+    int num_lines;     // Número de linhas
+} ProgramInfo;
+
+extern ProgramInfo programs[10];  // Array para armazenar informações dos programas
+extern int num_programs;          // Contador de programas
+
 // Function declarations
 ProcessManager* init_process_manager(int quantum_size);
 PCB* create_process(ProcessManager* pm);

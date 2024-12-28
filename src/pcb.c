@@ -2,6 +2,9 @@
 #include "cpu.h"
 #include <string.h>
 
+ProgramInfo programs[10];
+int num_programs = 0;
+
 ProcessManager* init_process_manager(int quantum_size) {
     ProcessManager* pm = (ProcessManager*)malloc(sizeof(ProcessManager));
     if (!pm) {

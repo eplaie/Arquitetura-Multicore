@@ -576,25 +576,18 @@ void assign_process_to_core(cpu* cpu, PCB* process, int core_id) {
     }
     
     lock_core(&cpu->core[core_id]);
-    if (!cpu->core[core_id].is_available) {
-        printf("Core %d is not available\n", core_id);
-        unlock_core(&cpu->core[core_id]);
-        return;
-    }
     
     printf("Assigning Process %d to Core %d (Previous State: %s)\n", 
            process->pid, core_id, state_to_string(process->state));
     
     cpu->core[core_id].current_process = process;
-    cpu->core[core_id].is_available = false;
     cpu->core[core_id].quantum_remaining = cpu->process_manager->quantum_size;
-    
-    // O PC do core começa do 0, pois é relativo ao processo
     cpu->core[core_id].PC = 0;
-    process->PC = 0;
+    cpu->core[core_id].is_available = false;  // Marca como não disponível para escalonamento
     
     process->state = RUNNING;
     process->core_id = core_id;
+    process->PC = 0;
     
     printf("Process %d now RUNNING on Core %d with quantum %d\n", 
            process->pid, core_id, cpu->core[core_id].quantum_remaining);
@@ -606,33 +599,23 @@ void assign_process_to_core(cpu* cpu, PCB* process, int core_id) {
 // Enhanced process release
 void release_core(cpu* cpu, int core_id) {
     if (core_id < 0 || core_id >= NUM_CORES) {
-        printf("Invalid core ID\n");
         return;
     }
     
     lock_core(&cpu->core[core_id]);
+    
     core* current_core = &cpu->core[core_id];
-    if (current_core->current_process != NULL) {
-        // Detailed state transition logging
-        printf("Releasing Core %d - Process %d changing state\n", 
+    if (current_core->current_process) {
+        printf("Releasing Core %d - Process %d\n", 
                core_id, current_core->current_process->pid);
         
         save_context(current_core->current_process, current_core);
-        
-        // Detailed state tracking
-        if (current_core->current_process->PC >= current_core->current_process->memory_limit) {
-            current_core->current_process->state = FINISHED;
-            printf("Process %d FINISHED\n", current_core->current_process->pid);
-        } else {
-            current_core->current_process->state = READY;
-            printf("Process %d moved to READY state\n", current_core->current_process->pid);
-        }
-        
-        current_core->current_process->core_id = -1;
         current_core->current_process = NULL;
-        current_core->is_available = true;
-        current_core->quantum_remaining = 0;
     }
+    
+    current_core->is_available = true;  // Marca como disponível para escalonamento
+    current_core->quantum_remaining = 0;
+    
     unlock_core(current_core);
 }
 

@@ -34,6 +34,7 @@ typedef struct cpu {
     pthread_mutex_t scheduler_mutex;  // Mutex para o escalonador
 } cpu;
 
+
 typedef struct instruction_pipe {
     char *instruction;
     unsigned short int num_instruction;

@@ -32,20 +32,18 @@ char* get_line_of_program(char* program_start, int line_number) {
         return NULL;
     }
     
-    printf("Debug - Fetching line %d from program\n", line_number);
+    printf("\nDebug - Getting line %d from program at %p\n", line_number, (void*)program_start);
+    printf("Debug - First few bytes: %.30s\n", program_start);
     
-    // Encontra início desta linha
+    // Encontra a linha desejada
     char* current = program_start;
     int current_line = 0;
     
     while (current_line < line_number) {
-        // Verifica se chegou ao fim do programa
         if (*current == '\0') {
             printf("Debug - End of program at line %d\n", current_line);
             return NULL;
         }
-        
-        // Conta nova linha
         if (*current == '\n') {
             current_line++;
         }
@@ -58,22 +56,21 @@ char* get_line_of_program(char* program_start, int line_number) {
         line_end = current + strlen(current);
     }
     
-    // Copia a linha
-    size_t line_len = line_end - current;
-    char* line = malloc(line_len + 1);
-    if (!line) return NULL;
+    // Aloca e copia a linha
+    size_t len = line_end - current;
+    char* result = malloc(len + 1);
+    if (!result) return NULL;
     
-    strncpy(line, current, line_len);
-    line[line_len] = '\0';
+    strncpy(result, current, len);
+    result[len] = '\0';
     
-    // Remove espaços em branco no final
-    while (line_len > 0 && isspace(line[line_len - 1])) {
-        line[line_len - 1] = '\0';
-        line_len--;
+    // Remove espaços finais
+    while (len > 0 && isspace(result[len - 1])) {
+        result[--len] = '\0';
     }
     
-    printf("Debug - Found line: '%s'\n", line);
-    return line;
+    printf("Debug - Found line: '%s'\n", result);
+    return result;
 }
 
 unsigned short int count_lines(char *program) {

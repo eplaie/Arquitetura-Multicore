@@ -4,7 +4,7 @@
 
 #define DEFAULT_QUANTUM 4
 #define BASE_ADDRESS_OFFSET 0
-#define MAX_CYCLES 3
+#define MAX_CYCLES 5
 #define SLEEP_INTERVAL 10000  // Reduzido para 10ms
 
 typedef struct {
@@ -14,6 +14,9 @@ typedef struct {
     int print_interval;
 } SystemConfig;
 
+// Protótipos das funções
+void print_system_state(architecture_state* state, cpu* cpu, ram* memory_ram, int cycle_count);
+void load_all_programs(cpu* cpu, ram* memory_ram, SystemConfig* config);
 
 int load_test_program(ram* memory_ram, PCB* process, const char* filename) {
     printf("\nAttempting to read file: %s\n", filename);
@@ -50,16 +53,16 @@ int load_test_program(ram* memory_ram, PCB* process, const char* filename) {
     programs[num_programs].num_lines = num_instructions;
     
     // Configura PCB
-    process->base_address = num_programs;  // Usa índice do programa como base_address
+    process->base_address = free_space;  // Alterado para usar o endereço real
     process->PC = 0;
     process->memory_limit = num_instructions;
     
-    printf("Program %d loaded at position %d with %d instructions\n", 
-           num_programs, free_space, num_instructions);
+    printf("Program loaded at position %d with %d instructions\n", 
+           free_space, num_instructions);
     
-    char* first_instr = get_line_of_program(programs[num_programs].start, 0);
+    char* first_instr = get_line_of_program(memory_ram->vector + free_space, 0);
     if (first_instr) {
-        printf("First instruction: '%s'\n", first_instr);
+        printf("First instruction at base %d: '%s'\n", free_space, first_instr);
         free(first_instr);
     }
 
@@ -68,40 +71,11 @@ int load_test_program(ram* memory_ram, PCB* process, const char* filename) {
     return free_space;
 }
 
-// E modifique execute_pipeline_cycle:
-void execute_pipeline_cycle(architecture_state* state __attribute__((unused)), 
-                          cpu* cpu, ram* memory_ram __attribute__((unused)), int core_id) {
-    core* current_core = &cpu->core[core_id];
-    PCB* current_process = current_core->current_process;
-    
-    if (!current_core->is_available || !current_process) {
-        return;
-    }
-
-    if (current_process->PC >= current_process->memory_limit) {
-        printf("Process %d completed\n", current_process->pid);
-        current_process->state = FINISHED;
-        release_core(cpu, core_id);
-        return;
-    }
-
-    // Usa o programa correto baseado no índice
-    char* instruction = get_line_of_program(
-        programs[current_process->base_address].start, 
-        current_process->PC
-    );
-    
-    if (!instruction) {
-        printf("Error: Could not fetch instruction for process %d\n", current_process->pid);
-        release_core(cpu, core_id);
-        return;
-    }
 
 void print_system_state(architecture_state* state __attribute__((unused)), 
                        cpu* cpu, ram* memory_ram, int cycle_count) {
     printf("\n=== System State at Cycle %d ===\n", cycle_count);
     
-    // Estado dos cores
     for (int i = 0; i < NUM_CORES; i++) {
         printf("Core %d: ", i);
         if (!cpu->core[i].is_available && cpu->core[i].current_process) {
@@ -144,21 +118,19 @@ void load_all_programs(cpu* cpu, ram* memory_ram, SystemConfig* config) {
     for (int i = 0; i < config->num_programs; i++) {
         PCB* process = create_process(cpu->process_manager);
         if (process != NULL) {
-            int base_addr = load_test_program(memory_ram, process, config->program_files[i]);
-            if (base_addr >= 0) {
-                set_process_base_address(process, base_addr);
-            }
+            load_test_program(memory_ram, process, config->program_files[i]);
         }
     }
 }
 
-int main() {
+int main(void) {
     SystemConfig config;
     initialize_system(&config);
 
-    cpu* cpu = malloc(sizeof(cpu));
+    // Alocação de memória
+    cpu* cpu = (struct cpu*)malloc(sizeof(cpu));
     ram* memory_ram = malloc(sizeof(ram));
-    disc* memory_disc = malloc(sizeof(disc));
+    disc* memory_disc __attribute__((unused)) = malloc(sizeof(disc));
     peripherals* peripherals = malloc(sizeof(peripherals));
     architecture_state* arch_state = malloc(sizeof(architecture_state));
 
@@ -180,7 +152,8 @@ int main() {
     int cycle_count = 0;
     arch_state->program_running = true;
 
-    while (arch_state->program_running && cycle_count < MAX_CYCLES) {
+
+        while (arch_state->program_running && cycle_count < MAX_CYCLES) {
         cycle_count++;
         printf("\n--- Cycle %d ---\n", cycle_count);
 
@@ -189,29 +162,22 @@ int main() {
             if (!cpu->core[core_id].is_available && cpu->core[core_id].current_process != NULL) {
                 PCB* current_process = cpu->core[core_id].current_process;
                 printf("Core %d executing process %d:\n", core_id, current_process->pid);
-                printf("  PC: %d\n", cpu->core[core_id].PC);
+                printf("  PC: %d\n", current_process->PC);
                 printf("  Base Address: %d\n", current_process->base_address);
                 printf("  Memory Limit: %d\n", current_process->memory_limit);
-                printf("  Quantum Remaining: %d\n", cpu->core[core_id].quantum_remaining);
-                
-                // Tenta ler a próxima instrução
-                char* next_instruction = get_line_of_program(memory_ram->vector, 
-                                                          current_process->base_address + cpu->core[core_id].PC);
-                if (next_instruction != NULL) {
-                    printf("  Next Instruction: %s\n", next_instruction);
-                    free(next_instruction);
-                }
-                
+                printf("  Quantum Remaining: %d\n", current_process->quantum);
+
+                // Executa o ciclo do pipeline
                 execute_pipeline_cycle(arch_state, cpu, memory_ram, core_id);
             } else {
                 printf("Core %d: Idle\n", core_id);
             }
         }
 
-        // Escalona processos
+        // Escalona novos processos se houver cores disponíveis
         if (cpu->process_manager->ready_count > 0) {
             printf("\nScheduling processes from ready queue (size: %d)\n", 
-                cpu->process_manager->ready_count);
+                  cpu->process_manager->ready_count);
             
             for (int core_id = 0; core_id < NUM_CORES; core_id++) {
                 if (cpu->core[core_id].is_available) {
@@ -242,6 +208,5 @@ int main() {
         printf("Execution completed after %d cycles\n", cycle_count);
     }
 
-    // free_architecture(cpu, memory_ram, memory_disc, peripherals, arch_state);
     return 0;
 }
