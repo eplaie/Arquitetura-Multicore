@@ -167,25 +167,41 @@ void load(cpu* cpu, char* instruction) {
 
 void store(cpu* cpu, ram* memory_ram, char* instruction) {
     core* current_core = get_current_core(cpu);
-    if (current_core == NULL) {
-        printf("Error: No active core found for store operation\n");
-        return;
+    if (!current_core) return;
+
+    PCB* current_process = current_core->current_process;
+    
+    // Simula bloqueio de I/O
+    if (current_process && !current_process->has_io) {
+        char* instruction_copy = strdup(instruction);
+        char* token = strtok(instruction_copy, " ");
+        token = strtok(NULL, " "); // Registrador
+        token = strtok(NULL, " "); // Endereço
+
+        // Bloqueia para endereços específicos (exemplo: A250)
+        if (token && strcmp(token, "A250") == 0) {
+            printf("Process %d blocked for I/O operation (STORE to A250)\n", 
+                   current_process->pid);
+            current_process->has_io = true;
+            current_process->state = BLOCKED;
+            
+            lock_scheduler(cpu);
+            cpu->process_manager->blocked_queue[cpu->process_manager->blocked_count++] = current_process;
+            release_core(cpu, current_core - cpu->core);
+            unlock_scheduler(cpu);
+            
+            free(instruction_copy);
+            return;
+        }
+        free(instruction_copy);
     }
 
     lock_core(current_core);
     char *instruction_copy = strdup(instruction);
     char *token, *register_name1, *memory_address;
     char buffer[10];
-    unsigned short int address, num_positions;
 
     token = strtok(instruction_copy, " ");
-    if (strcmp(token, "STORE") != 0) {
-        printf("Error: Invalid instruction\n");
-        free(instruction_copy);
-        unlock_core(current_core);
-        exit(1);
-    }
-
     token = strtok(NULL, " ");
     register_name1 = token;
 
@@ -194,14 +210,19 @@ void store(cpu* cpu, ram* memory_ram, char* instruction) {
 
     unsigned short int register_value = current_core->registers[get_register_index(register_name1)];
     sprintf(buffer, "%d", register_value);
-    num_positions = strlen(buffer);
-    address = verify_address(memory_ram, memory_address, num_positions);
-
+    size_t num_positions = strlen(buffer);
+    
+    // Obtém endereço e escreve
+    unsigned short int address = verify_address(memory_ram, memory_address, num_positions);
+    memset(&memory_ram->vector[address], 0, num_positions); // Limpa área primeiro
     strcpy(&memory_ram->vector[address], buffer);
+    
+    printf("STORE: Writing value %d to address %s\n", register_value, memory_address);
     
     free(instruction_copy);
     unlock_core(current_core);
 }
+
 // Operações aritméticas adaptadas para multicore
 unsigned short int add(cpu* cpu, char* instruction) {
     core* current_core = get_current_core(cpu);
@@ -612,23 +633,15 @@ void release_core(cpu* cpu, int core_id) {
         printf("Releasing Core %d - Process %d (State: %s)\n", 
                core_id, process->pid, state_to_string(process->state));
         
-        // Salva o contexto antes de liberar
-        save_context(process, current_core);
-        
-        // Atualiza estatísticas do processo
-        process->total_instructions = process->PC;
-        
-        // Marca como completado se necessário
-        if (process->PC >= process->memory_limit) {
-            process->was_completed = true;
-            process->state = FINISHED;
-            printf("Process %d marked as completed\n", process->pid);
+        // Não tenta salvar contexto se o processo terminou
+        if (process->state != FINISHED) {
+            save_context(process, current_core);
         }
         
-        // Limpa o core
-        current_core->current_process = NULL;
+        // Limpa o core primeiro, antes de qualquer outra operação
         current_core->is_available = true;
         current_core->quantum_remaining = 0;
+        current_core->current_process = NULL;  // Importante limpar após salvar o contexto
         
         printf("Core %d is now available\n", core_id);
     }

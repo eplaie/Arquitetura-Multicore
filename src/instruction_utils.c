@@ -39,22 +39,30 @@ unsigned short int ula(unsigned short int operating_a, unsigned short int operat
     }
 }
 
-unsigned short int verify_address(ram* memory_ram, char* address, unsigned short int num_positions) {
-    unsigned short int address_without_a = atoi(address + 1);
-
-    if (address_without_a + num_positions > NUM_MEMORY) {
-        printf("Error: Invalid memory address - out of bounds.\n");
+unsigned short int verify_address(ram* memory_ram, 
+                                char* address, 
+                                unsigned short int num_positions) {
+    if (!memory_ram || !address || address[0] != 'A') {
+        printf("Error: Invalid address format or memory\n");
         exit(1);
     }
 
-    for (unsigned short int i = 0; i < num_positions; i++) {
-        if (memory_ram->vector[address_without_a + i] != '\0') {
-            printf("Error: Invalid memory address - position %d is already occupied.\n", address_without_a + i);
-            exit(1);
-        }
+    unsigned short int pos = atoi(&address[1]);
+    
+    // Verifica se o endereço está dentro dos limites da memória
+    if (pos + num_positions >= NUM_MEMORY) {
+        printf("Error: Memory address out of bounds (address %d, size %d)\n", 
+               pos, num_positions);
+        exit(1);
     }
 
-    return address_without_a;
+    // Verifica se há espaço suficiente na memória
+    if (memory_ram->vector[pos] != '\0' && memory_ram->vector[pos] != ' ') {
+        // Em vez de erro, apenas avisa que vai sobrescrever
+        printf("Warning: Overwriting existing data at address %d\n", pos);
+    }
+
+    return pos;
 }
 
 void if_end(instruction_pipe* pipe) {

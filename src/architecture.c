@@ -1,11 +1,29 @@
 #include "architecture.h"
 
 void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, peripherals* peripherals, architecture_state* state) {
-    // Inicializa componentes básicos
+    if (!cpu || !memory_ram || !memory_disc || !peripherals || !state) {
+        printf("Error: NULL pointer in init_architecture\n");
+        exit(1);
+    }
+
+    // Inicializa memória RAM primeiro
+    memory_ram->vector = (char*)calloc(NUM_MEMORY, sizeof(char));
+    if (memory_ram->vector == NULL) {
+        printf("Failed to allocate RAM memory\n");
+        exit(1);
+    }
+
+    // Inicializa CPU
     init_cpu(cpu);
-    init_ram(memory_ram);
+    printf("CPU initialized with %d cores\n", NUM_CORES);
+
+    // Inicializa disco
     init_disc(memory_disc);
+    printf("Disc initialized\n");
+
+    // Inicializa periféricos
     init_peripherals(peripherals);
+    printf("Peripherals initialized\n");
 
     // Inicializa estado da arquitetura
     state->pipeline = malloc(sizeof(pipeline));
@@ -14,13 +32,16 @@ void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, peripherals
         exit(1);
     }
     init_pipeline(state->pipeline);
+    printf("Pipeline initialized\n");
 
     // Inicializa gerenciador de processos
     state->process_manager = init_process_manager(DEFAULT_QUANTUM);
     state->program_running = true;
+    printf("Process manager initialized\n");
 
     // Configura CPU para trabalhar com o process manager
     cpu->process_manager = state->process_manager;
+    printf("Architecture initialization complete\n");
 }
 
 void init_pipeline_multicore(architecture_state* state, cpu* cpu __attribute__((unused)), 
@@ -31,12 +52,16 @@ void init_pipeline_multicore(architecture_state* state, cpu* cpu __attribute__((
 
 void execute_pipeline_cycle(architecture_state* state __attribute__((unused)), 
                           cpu* cpu, ram* memory_ram, int core_id, int cycle_count) {
-    printf("\n=== Pipeline Execution Debug ===\n");
+    printf("\n=== Pipeline Execution Debug (Cycle %d) ===\n", cycle_count);
     
     core* current_core = &cpu->core[core_id];
+    if (!current_core) {
+        printf("Error: Invalid core\n");
+        return;
+    }
+
     PCB* current_process = current_core->current_process;
-    
-    if (current_process == NULL) {
+    if (!current_process) {
         printf("Debug - Core %d has no process\n", core_id);
         return;
     }
@@ -46,86 +71,81 @@ void execute_pipeline_cycle(architecture_state* state __attribute__((unused)),
     printf("  Base Address: %d\n", current_process->base_address);
     printf("  Memory Limit: %d\n", current_process->memory_limit);
     printf("  Quantum: %d\n", current_core->quantum_remaining);
+    printf("  Cycles Executed: %d\n", cycle_count);
 
     // Verifica se o processo terminou
     if (current_process->PC >= current_process->memory_limit) {
-        printf("Process %d completed after %d instructions\n", 
-               current_process->pid, current_process->total_instructions);
+        printf("Process %d completed after %d instructions (at cycle %d)\n", 
+               current_process->pid, current_process->total_instructions, cycle_count);
+        lock_scheduler(cpu);
         current_process->state = FINISHED;
         current_process->was_completed = true;
         current_process->total_instructions = current_process->PC;
+        current_process->cycles_executed = cycle_count;
         release_core(cpu, core_id);
+        unlock_scheduler(cpu);
         return;
     }
 
-    // Fetch Stage
+    char* instruction = NULL;
     printf("\n- Fetch Stage -\n");
-    char* instruction = get_line_of_program(
+    
+    instruction = get_line_of_program(
         memory_ram->vector + current_process->base_address,
         current_process->PC
     );
     
     if (!instruction || strlen(instruction) == 0) {
-        printf("Process %d reached end of instructions\n", current_process->pid);
+        printf("Process %d reached end of instructions at cycle %d\n", 
+               current_process->pid, cycle_count);
+        lock_scheduler(cpu);
         current_process->state = FINISHED;
-        current_process->was_completed = true;  // Marca como completado
+        current_process->was_completed = true;
+        current_process->cycles_executed = cycle_count;
         release_core(cpu, core_id);
-        if (instruction) free(instruction);
+        unlock_scheduler(cpu);
+        if (instruction) {
+            free(instruction);
+        }
         return;
     }
 
     printf("Fetched: '%s'\n", instruction);
-
-    // Incrementa contadores de estatísticas
     current_process->total_instructions++;
-    current_process->cycles_executed++;
-
-   // Executa a instrução e incrementa contadores
+    
+    // Executa a instrução
     printf("Executing instruction: %s\n", instruction);
-
-        // Executa e incrementa apenas uma vez
+    
     if (strncmp(instruction, "LOAD", 4) == 0) {
         load(cpu, instruction);
-        current_process->total_instructions++;
     } else if (strncmp(instruction, "STORE", 5) == 0) {
         store(cpu, memory_ram, instruction);
-        current_process->total_instructions++;
     } else if (strncmp(instruction, "ADD", 3) == 0) {
         add(cpu, instruction);
-        current_process->total_instructions++;
     }
 
-    // Atualiza ciclos executados
+    // Atualiza PC e quantum
+    current_process->PC++;
+    current_core->quantum_remaining--;
     current_process->cycles_executed = cycle_count;
 
-    // Atualiza PC e quantum
-    current_core->quantum_remaining--;
-    current_process->PC++;
-
-    printf("Updated - PC: %d, Quantum: %d\n", 
-           current_process->PC, current_core->quantum_remaining);
-
+    printf("Updated - PC: %d, Quantum: %d, Cycle: %d\n", 
+           current_process->PC, current_core->quantum_remaining, cycle_count);
 
     // Verifica quantum
     if (current_core->quantum_remaining <= 0) {
-        printf("Quantum expired for Process %d\n", current_process->pid);
-        current_process->state = READY;
+        printf("Quantum expired for Process %d at cycle %d\n", 
+               current_process->pid, cycle_count);
         lock_scheduler(cpu);
+        current_process->state = READY;
         cpu->process_manager->ready_queue[cpu->process_manager->ready_count++] = current_process;
         release_core(cpu, core_id);
         unlock_scheduler(cpu);
     }
 
-    // Verifica se o processo terminou após a execução
-    if (current_process->PC >= current_process->memory_limit) {
-        printf("Process %d completed execution\n", current_process->pid);
-        current_process->state = FINISHED;
-        current_process->was_completed = true;
-        current_process->total_instructions = current_process->PC;
-        release_core(cpu, core_id);
+    if (instruction) {
+        free(instruction);
     }
-
-    free(instruction);
 }
 
 void print_execution_summary(architecture_state* state, cpu* cpu, ram* memory_ram, int cycle_count) {

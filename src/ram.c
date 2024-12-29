@@ -1,16 +1,21 @@
 #include "ram.h"
 
 void init_ram(ram* memory_ram) {
-    memory_ram->vector = malloc(NUM_MEMORY * sizeof(char));
-
-    if (memory_ram->vector == NULL) {
-            printf("memory allocation failed in ram\n");
-            exit(1);
-        }
-    
-    for (unsigned short int i = 0; i < NUM_MEMORY; i++) {
-        memory_ram->vector[i] = '\0'; 
+    if (!memory_ram) {
+        printf("Error: NULL pointer in init_ram\n");
+        exit(1);
     }
+
+    // Aloca memória para o vetor
+    memory_ram->vector = (char*)calloc(NUM_MEMORY, sizeof(char));
+    if (memory_ram->vector == NULL) {
+        printf("Failed to allocate RAM memory\n");
+        exit(1);
+    }
+
+    // Inicializa a memória com zeros
+    memset(memory_ram->vector, 0, NUM_MEMORY);
+    printf("RAM initialized and cleared (%d bytes)\n", NUM_MEMORY);
 }
 
 void print_ram(ram* memory_ram) {

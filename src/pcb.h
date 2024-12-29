@@ -66,5 +66,6 @@ void schedule_next_process(cpu* cpu, int core_id);
 void save_context(PCB* pcb, core* core);
 void restore_context(PCB* pcb, core* core);
 bool check_program_running(cpu* cpu);
+void check_blocked_processes(cpu* cpu);
 
 #endif

@@ -134,3 +134,40 @@ void schedule_next_process(cpu* cpu, int core_id) {
     }
     unlock_scheduler(cpu);
 }
+
+void check_blocked_processes(cpu* cpu) {
+    if (!cpu || !cpu->process_manager) {
+        return;
+    }
+
+    ProcessManager* pm = cpu->process_manager;
+    
+    for (int i = 0; i < pm->blocked_count; i++) {
+        PCB* process = pm->blocked_queue[i];
+        
+        if (!process) continue;
+
+        // Simula término da operação de I/O após alguns ciclos
+        if (process->has_io && process->cycles_executed > 2) {
+            printf("I/O completed for Process %d\n", process->pid);
+            process->has_io = false;
+            process->state = READY;
+            
+            lock_scheduler(cpu);
+            
+            // Move para fila de prontos
+            pm->ready_queue[pm->ready_count++] = process;
+            
+            // Remove da fila de bloqueados
+            for (int j = i; j < pm->blocked_count - 1; j++) {
+                pm->blocked_queue[j] = pm->blocked_queue[j + 1];
+            }
+            pm->blocked_count--;
+            i--; // Ajusta índice após remoção
+            
+            unlock_scheduler(cpu);
+            
+            printf("Process %d moved from BLOCKED to READY\n", process->pid);
+        }
+    }
+}
