@@ -12,8 +12,8 @@ ProcessManager* init_process_manager(int quantum_size) {
         exit(1);
     }
     
-    pm->ready_queue = (PCB**)malloc(sizeof(PCB*) * 100);
-    pm->blocked_queue = (PCB**)malloc(sizeof(PCB*) * 100);
+    pm->ready_queue = (PCB**)malloc(sizeof(PCB*) * MAX_PROCESSES);
+    pm->blocked_queue = (PCB**)malloc(sizeof(PCB*) * MAX_PROCESSES);
     if (!pm->ready_queue || !pm->blocked_queue) {
         printf("Failed to allocate process queues\n");
         exit(1);
@@ -21,21 +21,28 @@ ProcessManager* init_process_manager(int quantum_size) {
 
     pm->ready_count = 0;
     pm->blocked_count = 0;
-    pm->next_pid = 0;  // Começa com 0 e incrementa ao criar processos
+    pm->next_pid = 0;
     pm->quantum_size = quantum_size;
 
     printf("Process manager initialized (quantum: %d)\n", quantum_size);
+    printf("Ready queue initialized with size %d\n", MAX_PROCESSES);
     
     return pm;
 }
 
+PCB* all_processes[MAX_PROCESSES];
+int total_processes = 0;
+
 PCB* create_process(ProcessManager* pm) {
+    if (total_processes >= MAX_PROCESSES) return NULL;
+    
     PCB* pcb = (PCB*)malloc(sizeof(PCB));
     if (pcb == NULL) {
         printf("Failed to allocate PCB\n");
         exit(1);
     }
     
+    // Inicialização normal...
     pcb->pid = pm->next_pid++;
     pcb->state = READY;
     pcb->priority = 0;
@@ -43,19 +50,16 @@ PCB* create_process(ProcessManager* pm) {
     pcb->core_id = -1;
     pcb->quantum = pm->quantum_size;
     pcb->has_io = false;
-    pcb->base_address = 0;  // Será atualizado depois
-    pcb->memory_limit = 0;  // Será atualizado depois
     
-    pcb->registers = (unsigned short int*)malloc(NUM_REGISTERS * sizeof(unsigned short int));
-    if (!pcb->registers) {
-        printf("Failed to allocate registers for PCB\n");
-        free(pcb);
-        exit(1);
-    }
-    memset(pcb->registers, 0, NUM_REGISTERS * sizeof(unsigned short int));
+    // Inicializa novos campos
+    pcb->total_instructions = 0;
+    pcb->cycles_executed = 0;
+    pcb->was_completed = false;
     
-    pm->ready_queue[pm->ready_count++] = pcb;
+    // Adiciona ao array global
+    all_processes[total_processes++] = pcb;
     
+    // Resto da inicialização...
     return pcb;
 }
 
@@ -65,9 +69,15 @@ void set_process_base_address(PCB* pcb, int base_address) {
 }
 
 void save_context(PCB* pcb, core* cur_core) {
-    // Salva PC relativo (não o endereço base)
+    if (!pcb || !cur_core) {
+        printf("Warning: Null pointer in save_context\n");
+        return;
+    }
+    
     pcb->PC = cur_core->PC;
-    memcpy(pcb->registers, cur_core->registers, NUM_REGISTERS * sizeof(unsigned short int));
+    if (pcb->registers && cur_core->registers) {
+        memcpy(pcb->registers, cur_core->registers, NUM_REGISTERS * sizeof(unsigned short int));
+    }
 }
 
 void restore_context(PCB* pcb, core* cur_core) {
@@ -77,25 +87,39 @@ void restore_context(PCB* pcb, core* cur_core) {
 }
 
 bool check_program_running(cpu* cpu) {
-    if (cpu->process_manager->ready_count > 0 || 
-        cpu->process_manager->blocked_count > 0) {
+    // Verifica se há processos na fila de prontos
+    if (cpu->process_manager->ready_count > 0) {
         return true;
     }
-    
+
+    // Verifica se há processos na fila de bloqueados
+    if (cpu->process_manager->blocked_count > 0) {
+        return true;
+    }
+
+    // Verifica se há processos executando nos cores
     for (int i = 0; i < NUM_CORES; i++) {
-        if (!cpu->core[i].is_available) {
+        if (!cpu->core[i].is_available && cpu->core[i].current_process != NULL) {
             return true;
         }
     }
-    
+
     return false;
 }
 
 void schedule_next_process(cpu* cpu, int core_id) {
-    if (cpu->process_manager->ready_count <= 0) return;
+    printf("Attempting to schedule next process (ready queue size: %d)\n", 
+           cpu->process_manager->ready_count);
+           
+    if (cpu->process_manager->ready_count <= 0) {
+        printf("No processes in ready queue\n");
+        return;
+    }
     
     lock_scheduler(cpu);
     PCB* next_process = cpu->process_manager->ready_queue[0];
+    
+    printf("Selected process %d for core %d\n", next_process->pid, core_id);
     
     // Reorganiza a fila de prontos
     for (int i = 0; i < cpu->process_manager->ready_count - 1; i++) {
@@ -103,9 +127,8 @@ void schedule_next_process(cpu* cpu, int core_id) {
     }
     cpu->process_manager->ready_count--;
     
-    // Atribui ao core com quantum completo
+    // Atribui ao core
     if (cpu->core[core_id].is_available) {
-        cpu->core[core_id].quantum_remaining = DEFAULT_QUANTUM;
         assign_process_to_core(cpu, next_process, core_id);
         printf("Scheduled process %d to core %d\n", next_process->pid, core_id);
     }

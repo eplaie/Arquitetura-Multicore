@@ -21,5 +21,8 @@ typedef struct pipeline_stage pipeline_stage;
 typedef struct peripherals peripherals;
 
 #define DEFAULT_QUANTUM 4
+#define MAX_CYCLES 5
+#define SLEEP_INTERVAL 10000
+#define MAX_PROCESSES 10
 
 #endif

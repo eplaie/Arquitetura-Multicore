@@ -599,6 +599,7 @@ void assign_process_to_core(cpu* cpu, PCB* process, int core_id) {
 // Enhanced process release
 void release_core(cpu* cpu, int core_id) {
     if (core_id < 0 || core_id >= NUM_CORES) {
+        printf("Warning: Invalid core_id in release_core\n");
         return;
     }
     
@@ -606,15 +607,31 @@ void release_core(cpu* cpu, int core_id) {
     
     core* current_core = &cpu->core[core_id];
     if (current_core->current_process) {
-        printf("Releasing Core %d - Process %d\n", 
-               core_id, current_core->current_process->pid);
+        PCB* process = current_core->current_process;
         
-        save_context(current_core->current_process, current_core);
+        printf("Releasing Core %d - Process %d (State: %s)\n", 
+               core_id, process->pid, state_to_string(process->state));
+        
+        // Salva o contexto antes de liberar
+        save_context(process, current_core);
+        
+        // Atualiza estatísticas do processo
+        process->total_instructions = process->PC;
+        
+        // Marca como completado se necessário
+        if (process->PC >= process->memory_limit) {
+            process->was_completed = true;
+            process->state = FINISHED;
+            printf("Process %d marked as completed\n", process->pid);
+        }
+        
+        // Limpa o core
         current_core->current_process = NULL;
+        current_core->is_available = true;
+        current_core->quantum_remaining = 0;
+        
+        printf("Core %d is now available\n", core_id);
     }
-    
-    current_core->is_available = true;  // Marca como disponível para escalonamento
-    current_core->quantum_remaining = 0;
     
     unlock_core(current_core);
 }

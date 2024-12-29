@@ -3,6 +3,7 @@
 
 #include "common_types.h"
 
+// Enumeração de estados do processo
 typedef enum {
     NEW,
     READY,
@@ -14,20 +15,26 @@ typedef enum {
 // Function prototype for state to string conversion
 const char* state_to_string(process_state state);
 
-struct PCB {
+// Definição do PCB
+typedef struct PCB {
     int pid;
-    process_state state; 
+    process_state state;
     int priority;
-    unsigned short int PC;
-    unsigned short int *registers;
+    int PC;
     int core_id;
     int quantum;
     int base_address;
     int memory_limit;
     bool has_io;
-    int execution_time;
-};
+    unsigned short int* registers;
+    
+    // Estatísticas
+    int total_instructions;
+    int cycles_executed;
+    bool was_completed;
+} PCB;
 
+// Gerenciador de Processos
 struct ProcessManager {
     PCB **ready_queue;
     PCB **blocked_queue;
@@ -37,15 +44,18 @@ struct ProcessManager {
     int quantum_size;
 };
 
-// Estrutura para gerenciar informações dos programas em memória
+// Estrutura para gerenciar programas na memória
 typedef struct {
-    char* start;       // Início do programa na memória
-    int length;        // Tamanho do programa
-    int num_lines;     // Número de linhas
+    char* start;
+    int length;
+    int num_lines;
 } ProgramInfo;
 
-extern ProgramInfo programs[10];  // Array para armazenar informações dos programas
-extern int num_programs;          // Contador de programas
+// Variáveis globais
+extern PCB* all_processes[MAX_PROCESSES];
+extern int total_processes;
+extern ProgramInfo programs[10];
+extern int num_programs;
 
 // Function declarations
 ProcessManager* init_process_manager(int quantum_size);

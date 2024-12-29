@@ -115,12 +115,23 @@ void initialize_system(SystemConfig* config) {
 }
 
 void load_all_programs(cpu* cpu, ram* memory_ram, SystemConfig* config) {
+    printf("\nLoading programs to ready queue...\n");
+    
     for (int i = 0; i < config->num_programs; i++) {
         PCB* process = create_process(cpu->process_manager);
         if (process != NULL) {
-            load_test_program(memory_ram, process, config->program_files[i]);
+            int base_addr = load_test_program(memory_ram, process, config->program_files[i]);
+            if (base_addr >= 0) {
+                process->base_address = base_addr;
+                // Garantir que o processo está na fila de prontos
+                process->state = READY;
+                cpu->process_manager->ready_queue[cpu->process_manager->ready_count++] = process;
+                printf("Process %d added to ready queue\n", process->pid);
+            }
         }
     }
+    
+    printf("Total processes in ready queue: %d\n", cpu->process_manager->ready_count);
 }
 
 int main(void) {
@@ -153,28 +164,11 @@ int main(void) {
     arch_state->program_running = true;
 
 
-        while (arch_state->program_running && cycle_count < MAX_CYCLES) {
+    while (arch_state->program_running && cycle_count < MAX_CYCLES) {
         cycle_count++;
         printf("\n--- Cycle %d ---\n", cycle_count);
 
-        // Executa pipeline em cada core
-        for (int core_id = 0; core_id < NUM_CORES; core_id++) {
-            if (!cpu->core[core_id].is_available && cpu->core[core_id].current_process != NULL) {
-                PCB* current_process = cpu->core[core_id].current_process;
-                printf("Core %d executing process %d:\n", core_id, current_process->pid);
-                printf("  PC: %d\n", current_process->PC);
-                printf("  Base Address: %d\n", current_process->base_address);
-                printf("  Memory Limit: %d\n", current_process->memory_limit);
-                printf("  Quantum Remaining: %d\n", current_process->quantum);
-
-                // Executa o ciclo do pipeline
-                execute_pipeline_cycle(arch_state, cpu, memory_ram, core_id);
-            } else {
-                printf("Core %d: Idle\n", core_id);
-            }
-        }
-
-        // Escalona novos processos se houver cores disponíveis
+        // Escalona processos primeiro
         if (cpu->process_manager->ready_count > 0) {
             printf("\nScheduling processes from ready queue (size: %d)\n", 
                   cpu->process_manager->ready_count);
@@ -187,26 +181,35 @@ int main(void) {
             }
         }
 
-        // Imprime estado completo a cada 50 ciclos
-        if (cycle_count % 50 == 0) {
-            print_system_state(arch_state, cpu, memory_ram, cycle_count);
+        // Depois executa o pipeline em cada core
+        for (int core_id = 0; core_id < NUM_CORES; core_id++) {
+            if (!cpu->core[core_id].is_available && cpu->core[core_id].current_process != NULL) {
+                PCB* current_process = cpu->core[core_id].current_process;
+                printf("Core %d executing process %d:\n", core_id, current_process->pid);
+                printf("  PC: %d\n", current_process->PC);
+                printf("  Base Address: %d\n", current_process->base_address);
+                printf("  Memory Limit: %d\n", current_process->memory_limit);
+                printf("  Quantum Remaining: %d\n", cpu->core[core_id].quantum_remaining);
+
+                execute_pipeline_cycle(arch_state, cpu, memory_ram, core_id, cycle_count);
+            } else {
+                printf("Core %d: Idle\n", core_id);
+            }
         }
 
         // Verifica condição de término
         arch_state->program_running = check_program_running(cpu);
         if (!arch_state->program_running) {
-            printf("\nNo more processes to execute\n");
+            printf("\nNo more processes to execute (Ready: %d, Blocked: %d)\n", 
+                   cpu->process_manager->ready_count,
+                   cpu->process_manager->blocked_count);
         }
         
         usleep(SLEEP_INTERVAL);
     }
 
-    printf("\n=== Execution Summary ===\n");
-    if (cycle_count >= MAX_CYCLES) {
-        printf("Execution stopped after reaching maximum cycle count (%d)\n", MAX_CYCLES);
-    } else {
-        printf("Execution completed after %d cycles\n", cycle_count);
-    }
+    // Imprime sumário após o loop
+    print_execution_summary(arch_state, cpu, memory_ram, cycle_count);
 
     return 0;
 }
