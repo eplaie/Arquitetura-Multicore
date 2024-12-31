@@ -167,60 +167,68 @@ void load(cpu* cpu, char* instruction) {
 
 void store(cpu* cpu, ram* memory_ram, char* instruction) {
     core* current_core = get_current_core(cpu);
-    if (!current_core) return;
+    if (!current_core || !current_core->current_process) return;
 
     PCB* current_process = current_core->current_process;
-    
-    // Simula bloqueio de I/O
-    if (current_process && !current_process->has_io) {
-        char* instruction_copy = strdup(instruction);
-        char* token = strtok(instruction_copy, " ");
-        token = strtok(NULL, " "); // Registrador
-        token = strtok(NULL, " "); // Endereço
+    char* instruction_copy = strdup(instruction);
+    if (!instruction_copy) return;
 
-        // Bloqueia para endereços específicos (exemplo: A250)
-        if (token && strcmp(token, "A250") == 0) {
-            printf("Process %d blocked for I/O operation (STORE to A250)\n", 
-                   current_process->pid);
-            current_process->has_io = true;
-            current_process->state = BLOCKED;
-            
-            lock_scheduler(cpu);
-            cpu->process_manager->blocked_queue[cpu->process_manager->blocked_count++] = current_process;
-            release_core(cpu, current_core - cpu->core);
-            unlock_scheduler(cpu);
-            
-            free(instruction_copy);
-            return;
+    // Parse da instrução
+    char *register_name, *address_str;
+    strtok(instruction_copy, " ");  // Ignora "STORE"
+    register_name = strtok(NULL, " ");
+    address_str = strtok(NULL, " ");
+
+    // Verifica se é um acesso de I/O (A250)
+    if (address_str && strcmp(address_str, "A250") == 0) {
+        printf("Process %d blocked for I/O operation (STORE to A250) at PC: %d\n", 
+               current_process->pid, current_process->PC);
+        
+        lock_scheduler(cpu);
+        
+        // Marca processo como bloqueado por I/O
+        current_process->has_io = true;
+        current_process->blocked_time = 0;
+        current_process->state = BLOCKED;
+        
+        // Salva o contexto atual
+        save_context(current_process, current_core);
+        
+        // Adiciona à fila de bloqueados se ainda não estiver nela
+        bool already_blocked = false;
+        for (int i = 0; i < cpu->process_manager->blocked_count; i++) {
+            if (cpu->process_manager->blocked_queue[i] == current_process) {
+                already_blocked = true;
+                break;
+            }
         }
+        
+        if (!already_blocked) {
+            cpu->process_manager->blocked_queue[cpu->process_manager->blocked_count++] = current_process;
+        }
+        
+        // Libera o core
+        release_core(cpu, current_core - cpu->core);
+        
+        unlock_scheduler(cpu);
         free(instruction_copy);
+        return;
     }
 
+    // Para outros endereços, procede normalmente...
     lock_core(current_core);
-    char *instruction_copy = strdup(instruction);
-    char *token, *register_name1, *memory_address;
+    unsigned short int register_value = current_core->registers[get_register_index(register_name)];
     char buffer[10];
-
-    token = strtok(instruction_copy, " ");
-    token = strtok(NULL, " ");
-    register_name1 = token;
-
-    token = strtok(NULL, " ");
-    memory_address = token;
-
-    unsigned short int register_value = current_core->registers[get_register_index(register_name1)];
     sprintf(buffer, "%d", register_value);
-    size_t num_positions = strlen(buffer);
     
-    // Obtém endereço e escreve
-    unsigned short int address = verify_address(memory_ram, memory_address, num_positions);
-    memset(&memory_ram->vector[address], 0, num_positions); // Limpa área primeiro
+    unsigned short int address = verify_address(memory_ram, address_str, strlen(buffer));
+    memset(&memory_ram->vector[address], 0, strlen(buffer));
     strcpy(&memory_ram->vector[address], buffer);
     
-    printf("STORE: Writing value %d to address %s\n", register_value, memory_address);
+    printf("STORE: Writing value %d to address %s\n", register_value, address_str);
     
-    free(instruction_copy);
     unlock_core(current_core);
+    free(instruction_copy);
 }
 
 // Operações aritméticas adaptadas para multicore
@@ -596,26 +604,48 @@ void assign_process_to_core(cpu* cpu, PCB* process, int core_id) {
         return;
     }
     
+    printf("Attempting to assign Process %d to Core %d (PC: %d)\n", 
+           process->pid, core_id, process->PC);
+    
+    // Primeiro libera o processo de qualquer outro core que possa estar executando
+    for (int i = 0; i < NUM_CORES; i++) {
+        if (i != core_id && cpu->core[i].current_process == process) {
+            printf("Process %d is already running on Core %d, releasing...\n", 
+                   process->pid, i);
+            // Usa release_core que já tem seu próprio mecanismo de lock
+            release_core(cpu, i);
+        }
+    }
+    
+    // Agora obtém o lock do core de destino
     lock_core(&cpu->core[core_id]);
     
-    printf("Assigning Process %d to Core %d (Previous State: %s)\n", 
-           process->pid, core_id, state_to_string(process->state));
+    printf("Assigning Process %d to Core %d (Previous State: %s, PC: %d)\n", 
+           process->pid, core_id, state_to_string(process->state), process->PC);
     
     cpu->core[core_id].current_process = process;
     cpu->core[core_id].quantum_remaining = cpu->process_manager->quantum_size;
-    cpu->core[core_id].PC = 0;
-    cpu->core[core_id].is_available = false;  // Marca como não disponível para escalonamento
+    cpu->core[core_id].PC = process->PC;
+    cpu->core[core_id].is_available = false;
     
     process->state = RUNNING;
     process->core_id = core_id;
-    process->PC = 0;
     
-    printf("Process %d now RUNNING on Core %d with quantum %d\n", 
-           process->pid, core_id, cpu->core[core_id].quantum_remaining);
+    // Restaura o contexto se necessário
+    if (process->cycles_executed > 0) {
+        restore_context(process, &cpu->core[core_id]);
+    } else {
+        // Para um processo novo, apenas zera os registradores
+        for (int i = 0; i < NUM_REGISTERS; i++) {
+            cpu->core[core_id].registers[i] = 0;
+        }
+    }
+    
+    printf("Process %d now RUNNING on Core %d with quantum %d (PC: %d)\n", 
+           process->pid, core_id, cpu->core[core_id].quantum_remaining, cpu->core[core_id].PC);
     
     unlock_core(&cpu->core[core_id]);
 }
-
 
 // Enhanced process release
 void release_core(cpu* cpu, int core_id) {
@@ -629,19 +659,20 @@ void release_core(cpu* cpu, int core_id) {
     core* current_core = &cpu->core[core_id];
     if (current_core->current_process) {
         PCB* process = current_core->current_process;
+        process_state prev_state = process->state;
         
-        printf("Releasing Core %d - Process %d (State: %s)\n", 
-               core_id, process->pid, state_to_string(process->state));
+        printf("Releasing Core %d - Process %d (Previous State: %s)\n", 
+               core_id, process->pid, state_to_string(prev_state));
         
         // Não tenta salvar contexto se o processo terminou
-        if (process->state != FINISHED) {
+        if (prev_state != FINISHED) {
             save_context(process, current_core);
         }
         
-        // Limpa o core primeiro, antes de qualquer outra operação
+        // Limpa o core
         current_core->is_available = true;
         current_core->quantum_remaining = 0;
-        current_core->current_process = NULL;  // Importante limpar após salvar o contexto
+        current_core->current_process = NULL;
         
         printf("Core %d is now available\n", core_id);
     }

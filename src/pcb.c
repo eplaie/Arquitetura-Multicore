@@ -42,7 +42,7 @@ PCB* create_process(ProcessManager* pm) {
         exit(1);
     }
     
-    // Inicialização normal...
+    // Inicialização básica
     pcb->pid = pm->next_pid++;
     pcb->state = READY;
     pcb->priority = 0;
@@ -50,16 +50,25 @@ PCB* create_process(ProcessManager* pm) {
     pcb->core_id = -1;
     pcb->quantum = pm->quantum_size;
     pcb->has_io = false;
-    
-    // Inicializa novos campos
     pcb->total_instructions = 0;
     pcb->cycles_executed = 0;
     pcb->was_completed = false;
+    pcb->blocked_time = 0;
     
-    // Adiciona ao array global
+    // Inicializa registradores
+    pcb->registers = malloc(NUM_REGISTERS * sizeof(unsigned short int));
+    if (pcb->registers == NULL) {
+        printf("Failed to allocate registers for PCB\n");
+        free(pcb);
+        exit(1);
+    }
+    
+    // Zera todos os registradores
+    for (int i = 0; i < NUM_REGISTERS; i++) {
+        pcb->registers[i] = 0;
+    }
+    
     all_processes[total_processes++] = pcb;
-    
-    // Resto da inicialização...
     return pcb;
 }
 
@@ -81,7 +90,11 @@ void save_context(PCB* pcb, core* cur_core) {
 }
 
 void restore_context(PCB* pcb, core* cur_core) {
-    // Restaura PC relativo
+    if (!pcb || !cur_core || !pcb->registers || !cur_core->registers) {
+        printf("Warning: Invalid pointers in restore_context\n");
+        return;
+    }
+    
     cur_core->PC = pcb->PC;
     memcpy(cur_core->registers, pcb->registers, NUM_REGISTERS * sizeof(unsigned short int));
 }
@@ -136,38 +149,55 @@ void schedule_next_process(cpu* cpu, int core_id) {
 }
 
 void check_blocked_processes(cpu* cpu) {
-    if (!cpu || !cpu->process_manager) {
-        return;
-    }
-
+    if (!cpu || !cpu->process_manager) return;
+    
     ProcessManager* pm = cpu->process_manager;
     
     for (int i = 0; i < pm->blocked_count; i++) {
         PCB* process = pm->blocked_queue[i];
-        
         if (!process) continue;
 
-        // Simula término da operação de I/O após alguns ciclos
-        if (process->has_io && process->cycles_executed > 2) {
-            printf("I/O completed for Process %d\n", process->pid);
-            process->has_io = false;
-            process->state = READY;
+        // Verifica processos bloqueados por I/O
+        if (process->has_io) {
+            process->blocked_time++;
+            printf("Process %d I/O waiting time: %d cycles\n", 
+                   process->pid, process->blocked_time);
             
-            lock_scheduler(cpu);
-            
-            // Move para fila de prontos
-            pm->ready_queue[pm->ready_count++] = process;
-            
-            // Remove da fila de bloqueados
-            for (int j = i; j < pm->blocked_count - 1; j++) {
-                pm->blocked_queue[j] = pm->blocked_queue[j + 1];
+            // Verifica se já pode desbloquear (após 3 ciclos)
+            if (process->blocked_time >= 3) {
+                printf("I/O operation completed for Process %d (blocked for %d cycles)\n", 
+                       process->pid, process->blocked_time);
+                
+                // Reseta flags de I/O
+                process->has_io = false;
+                process->blocked_time = 0;
+                
+                // IMPORTANTE: Atualiza estado antes de liberar o core
+                process->state = READY;
+                
+                // Garante que não está executando em nenhum core
+                for (int c = 0; c < NUM_CORES; c++) {
+                    if (cpu->core[c].current_process == process) {
+                        printf("Removing process %d from Core %d\n", process->pid, c);
+                        release_core(cpu, c);
+                    }
+                }
+                
+                // Move para a fila de prontos
+                lock_scheduler(cpu);
+                pm->ready_queue[pm->ready_count++] = process;
+                
+                // Remove da fila de bloqueados
+                for (int j = i; j < pm->blocked_count - 1; j++) {
+                    pm->blocked_queue[j] = pm->blocked_queue[j + 1];
+                }
+                pm->blocked_count--;
+                i--;  // Ajusta o índice após a remoção
+                unlock_scheduler(cpu);
+                
+                printf("Process %d moved from BLOCKED to READY (PC: %d)\n", 
+                       process->pid, process->PC);
             }
-            pm->blocked_count--;
-            i--; // Ajusta índice após remoção
-            
-            unlock_scheduler(cpu);
-            
-            printf("Process %d moved from BLOCKED to READY\n", process->pid);
         }
     }
 }

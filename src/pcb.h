@@ -27,11 +27,12 @@ typedef struct PCB {
     int memory_limit;
     bool has_io;
     unsigned short int* registers;
+  
     
-    // Estatísticas
-    int total_instructions;
-    int cycles_executed;
-    bool was_completed;
+    int total_instructions;  
+    int cycles_executed;     
+    bool was_completed;      
+    int blocked_time;        
 } PCB;
 
 // Gerenciador de Processos
