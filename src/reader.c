@@ -47,12 +47,16 @@ char* read_program(const char *filename) {
 
 char* get_line_of_program(char* program_start, int line_number) {
     if (!program_start) {
-        printf("Debug - Null program pointer\n");
+        printf("\n╔═══ Program Status ═══╗");
+        printf("\n║ Error: Null Pointer ║");
+        printf("\n╚════════════════════╝\n");
         return NULL;
     }
 
-    printf("\nDebug - Getting line %d from program at %p\n", line_number, (void*)program_start);
-    printf("Debug - First few bytes: %.30s\n", program_start);
+    printf("\n╔═══ Program Read Operation ═══╗");
+    printf("\n├── Line: %d", line_number);
+    printf("\n├── Address: %p", (void*)program_start);
+    printf("\n└── Content Preview: %.30s\n", program_start);
 
     // Encontra a linha desejada
     char* current = program_start;
@@ -60,7 +64,7 @@ char* get_line_of_program(char* program_start, int line_number) {
 
     while (current_line < line_number) {
         if (*current == '\0') {
-            printf("Debug - End of program at line %d\n", current_line);
+            printf("\n[Program Status] End reached at line %d\n", current_line);
             return NULL;
         }
         if (*current == '\n') {
@@ -78,7 +82,10 @@ char* get_line_of_program(char* program_start, int line_number) {
     // Aloca e copia a linha
     size_t len = line_end - current;
     char* result = malloc(len + 1);
-    if (!result) return NULL;
+    if (!result) {
+        printf("\n[Memory Error] Failed to allocate line buffer\n");
+        return NULL;
+    }
 
     strncpy(result, current, len);
     result[len] = '\0';
@@ -88,7 +95,7 @@ char* get_line_of_program(char* program_start, int line_number) {
         result[--len] = '\0';
     }
 
-    printf("Debug - Found line: '%s'\n", result);
+    printf("\n[Line Found] '%s'\n", result);
     return result;
 }
 
