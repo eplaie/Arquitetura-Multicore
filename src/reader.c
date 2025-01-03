@@ -1,29 +1,48 @@
 #include "reader.h"
 
 char* read_program(const char *filename) {
-    FILE *arq = fopen(filename, "r"); 
+    if (!filename) {
+        printf("Error: NULL filename\n");
+        return NULL;
+    }
+
+    FILE *arq = fopen(filename, "r");
     if (arq == NULL) {
-        printf("error opening file\n");
-        exit(1);
+        printf("Error opening file: %s\n", filename);
+        return NULL;
     }
 
-    char *program = NULL;  
-    size_t length = 0;     
-    int ch;
+    // Determina o tamanho do arquivo
+    fseek(arq, 0, SEEK_END);
+    long fsize = ftell(arq);
+    fseek(arq, 0, SEEK_SET);
 
-    while ((ch = fgetc(arq)) != EOF) {
-        program = (char*) realloc(program, length + 2);  
-        if (program == NULL) {
-            printf("memory allocation failed\n");
-            exit(1);
-        }
-        program[length] = ch;
-        length++;
-        program[length] = '\0';
+    if (fsize <= 0) {
+        printf("Error: Empty or invalid file\n");
+        fclose(arq);
+        return NULL;
     }
 
+    // Aloca memória para o conteúdo + caractere nulo
+    char *program = (char*)malloc(fsize + 1);
+    if (program == NULL) {
+        printf("Error: Memory allocation failed for program\n");
+        fclose(arq);
+        return NULL;
+    }
+
+    // Lê o arquivo
+    size_t read_size = fread(program, 1, fsize, arq);
+    if (read_size != (size_t)fsize) {
+        printf("Error: Failed to read entire file\n");
+        free(program);
+        fclose(arq);
+        return NULL;
+    }
+
+    program[fsize] = '\0';
     fclose(arq);
-    return program;  
+    return program;
 }
 
 char* get_line_of_program(char* program_start, int line_number) {
