@@ -1,91 +1,90 @@
 #include "pipeline.h"
-#include "os_display.h"
 
 void init_pipeline(pipeline* p) {
-    if (!p) return;
-
     reset_pipeline_stage(&p->IF);
     reset_pipeline_stage(&p->ID);
     reset_pipeline_stage(&p->EX);
     reset_pipeline_stage(&p->MEM);
     reset_pipeline_stage(&p->WB);
     p->current_core = 0;
-
-    show_system_summary(0, 0, 0, 0);  // Estado inicial do pipeline
 }
 
 void reset_pipeline_stage(pipeline_stage* stage) {
-    if (!stage) return;
-
     stage->instruction = NULL;
-    stage->type = INVALID;
+    stage->type = 0;
     stage->core_id = -1;
     stage->is_stalled = false;
     stage->is_busy = false;
 }
 
 char* instruction_fetch(cpu* cpu, ram* memory, int core_id) {
-    if (core_id < 0 || core_id >= NUM_CORES) return NULL;
+    if (core_id < 0 || core_id >= NUM_CORES) {
+        return NULL;
+    }
 
     core* current_core = &cpu->core[core_id];
-    if (!current_core->is_available || !current_core->current_process) return NULL;
-
     PCB* current_process = current_core->current_process;
 
+    if (!current_core->is_available || !current_process) {
+        return NULL;
+    }
+
+    // Verifica quantum
     if (check_quantum_expired(cpu, core_id)) {
-        show_process_state(current_process->pid, "RUNNING", "READY");
         handle_preemption(cpu, core_id);
         return NULL;
     }
 
+    // Usa o endereço base do processo + PC
     char* instruction = get_line_of_program(
         memory->vector + current_process->base_address,
         current_process->PC
     );
 
-    if (instruction) {
-        show_cpu_execution(core_id, current_process->pid, instruction, current_process->PC);
-    }
-
     return instruction;
 }
 
 void execute(cpu* cpu, instruction_pipe* p, int core_id) {
-    if (core_id < 0 || core_id >= NUM_CORES) return;
+    if (core_id < 0 || core_id >= NUM_CORES) {
+        return;
+    }
 
     core* current_core = &cpu->core[core_id];
-    if (!current_core->is_available || !current_core->current_process) return;
+    if (!current_core->is_available || current_core->current_process == NULL) {
+        return;
+    }
 
-    PCB* current_process = current_core->current_process;
-
+    // Verifica quantum antes da execução
     if (check_quantum_expired(cpu, core_id)) {
-        show_process_state(current_process->pid, "RUNNING", "READY");
         handle_preemption(cpu, core_id);
         return;
     }
 
-    // Executa a instrução
-    show_cpu_execution(core_id, current_process->pid, p->instruction, current_process->PC);
+    // Executa a instrução normalmente
     control_unit(cpu, p);
 
-    // Atualiza quantum
-    if (current_process) {
+    // Atualiza estatísticas do processo
+    if (current_core->current_process) {
         current_core->quantum_remaining--;
-        show_scheduler_state(cpu->process_manager->ready_count,
-                           cpu->process_manager->blocked_count);
     }
 }
 
 void memory_access(cpu* cpu, ram* memory_ram, type_of_instruction type, char* instruction, int core_id) {
-    if (core_id < 0 || core_id >= NUM_CORES || !instruction) return;
+    if (core_id < 0 || core_id >= NUM_CORES || !instruction) {
+        return;
+    }
 
     core* current_core = &cpu->core[core_id];
-    if (!current_core->is_available || !current_core->current_process) return;
+    if (!current_core->is_available || current_core->current_process == NULL) {
+        return;
+    }
 
+    // Implementa acesso à memória com verificação de permissões do processo
     PCB* current_process = current_core->current_process;
 
-    // Verifica limites de memória
+    // Verifica se o acesso está dentro dos limites de memória do processo
     if (type == STORE || type == LOAD) {
+        // Extrair endereço da instrução
         char* token = strtok(strdup(instruction), " ");
         token = strtok(NULL, " "); // Skip instruction name
         token = strtok(NULL, " "); // Get address
@@ -94,16 +93,12 @@ void memory_access(cpu* cpu, ram* memory_ram, type_of_instruction type, char* in
 
         if (address < current_process->base_address ||
             address >= (current_process->base_address + current_process->memory_limit)) {
-            show_memory_operation(current_process->pid, "ACCESS VIOLATION", address);
+            printf("Memory access violation for process %d\n", current_process->pid);
             return;
         }
-
-        show_memory_operation(current_process->pid,
-                            type == STORE ? "STORE" : "LOAD",
-                            address);
     }
 
-    // Executa acesso
+    // Executa o acesso à memória
     if (type == STORE) {
         store(cpu, memory_ram, instruction);
     } else if (type == LOAD) {
@@ -112,76 +107,87 @@ void memory_access(cpu* cpu, ram* memory_ram, type_of_instruction type, char* in
 }
 
 void write_back(cpu* cpu, type_of_instruction type, char* instruction, unsigned short int result, int core_id) {
-    if (core_id < 0 || core_id >= NUM_CORES) return;
+    if (core_id < 0 || core_id >= NUM_CORES) {
+        return;
+    }
 
     core* current_core = &cpu->core[core_id];
-    if (!current_core->is_available || !current_core->current_process) return;
+    if (!current_core->is_available || current_core->current_process == NULL) {
+        return;
+    }
 
+    // Implementa write-back considerando o processo atual
     if (type == ADD || type == SUB || type == MUL || type == DIV) {
-        char* instr_copy = strdup(instruction);
-        char* token = strtok(instr_copy, " ");
+        // Extrai o registrador de destino da instrução
+        char* token = strtok(strdup(instruction), " ");
         token = strtok(NULL, " "); // Get destination register
 
         unsigned short int reg_index = get_register_index(token);
         current_core->registers[reg_index] = result;
-
-        show_cpu_execution(core_id, current_core->current_process->pid,
-                          "WRITE_BACK", current_core->PC);
-
-        free(instr_copy);
     }
 }
 
-void check_pipeline_preemption(pipeline* p, cpu* cpu) {
-    if (!p || !cpu) return;
+type_of_instruction instruction_decode(cpu* cpu, char* instruction, unsigned short int num_instruction) {
+    return cpu_decode(cpu, instruction, num_instruction);
+}
 
+void check_pipeline_preemption(pipeline* p, cpu* cpu) {
     int core_id = p->current_core;
     core* current_core = &cpu->core[core_id];
 
-    if (!current_core->is_available || !current_core->current_process) return;
+    if (!current_core->is_available || current_core->current_process == NULL) return;
 
     if (current_core->quantum_remaining <= 0) {
         PCB* current_process = current_core->current_process;
 
-        show_process_state(current_process->pid, "RUNNING", "READY");
+        printf("Pipeline Preemption: Process %d quantum expired on core %d\n",
+               current_process->pid, core_id);
 
         lock_scheduler(cpu);
 
+        // Detailed state transition
         current_process->state = READY;
+        printf("Process %d moved from RUNNING to READY state\n", current_process->pid);
+
+        // Add process back to ready queue
         cpu->process_manager->ready_queue[cpu->process_manager->ready_count++] = current_process;
+
+        // Release the core
         release_core(cpu, core_id);
 
         unlock_scheduler(cpu);
 
-        // Limpa pipeline
+        // Reset pipeline stages to prepare for next context
         reset_pipeline_stage(&p->IF);
         reset_pipeline_stage(&p->ID);
         reset_pipeline_stage(&p->EX);
         reset_pipeline_stage(&p->MEM);
         reset_pipeline_stage(&p->WB);
-
-        // show_scheduler_state(cpu->process_manager->ready_count,
-        //                    cpu->process_manager->blocked_count);
     }
 }
 
+// Enhanced pipeline context switching
 void switch_pipeline_context(pipeline* p, cpu* cpu, int new_core_id) {
-    if (!p || !cpu || new_core_id < 0 || new_core_id >= NUM_CORES) return;
+    if (new_core_id < 0 || new_core_id >= NUM_CORES) {
+        printf("Invalid core ID for context switch\n");
+        return;
+    }
 
-    // Salva contexto atual
+    // Save context of current core if needed
     if (p->current_core >= 0 && p->current_core < NUM_CORES) {
         core* current_core = &cpu->core[p->current_core];
         if (current_core->current_process) {
-            show_process_state(current_core->current_process->pid,
-                             "RUNNING", "SWITCHING");
+            printf("Saving context for Process %d on Core %d\n",
+                   current_core->current_process->pid, p->current_core);
             save_context(current_core->current_process, current_core);
         }
     }
 
-    show_cores_state(NUM_CORES, NULL);
+    // Switch to new core
+    printf("Switching pipeline context to Core %d\n", new_core_id);
     p->current_core = new_core_id;
 
-    // Limpa pipeline para novo contexto
+    // Clear pipeline stages for new context
     reset_pipeline_stage(&p->IF);
     reset_pipeline_stage(&p->ID);
     reset_pipeline_stage(&p->EX);

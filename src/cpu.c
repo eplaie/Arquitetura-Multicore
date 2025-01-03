@@ -16,76 +16,6 @@ static core* get_current_core(cpu* cpu) {
     return NULL;
 }
 
-unsigned short int execute_arithmetic(cpu* cpu, instruction_pipe* p) {
-    core* current_core = get_current_core(cpu);
-    if (current_core == NULL) return 0;
-
-    lock_core(current_core);
-
-    // Copia a instrução para não modificar a original
-    char* instruction_copy = strdup(p->instruction);
-    if (!instruction_copy) {
-        unlock_core(current_core);
-        return 0;
-    }
-
-    // Variáveis para parsing
-    char *token, *register_name1, *register_name2;
-    unsigned short int value = 0, result = 0;
-
-    // Pega o tipo da operação (primeira palavra)
-    token = strtok(instruction_copy, " ");
-    if (!token) {
-        free(instruction_copy);
-        unlock_core(current_core);
-        return 0;
-    }
-
-    // Pega primeiro registrador
-    token = strtok(NULL, " ");
-    if (!token) {
-        free(instruction_copy);
-        unlock_core(current_core);
-        return 0;
-    }
-    register_name1 = token;
-
-    // Pega segundo operando (registrador ou valor)
-    token = strtok(NULL, " ");
-    if (!token) {
-        free(instruction_copy);
-        unlock_core(current_core);
-        return 0;
-    }
-
-    // Se é dígito, usa valor direto, senão usa valor do registrador
-    if (isdigit(token[0])) {
-        value = atoi(token);
-        result = ula(current_core->registers[get_register_index(register_name1)],
-                    value, p->type);
-    } else {
-        register_name2 = token;
-        result = ula(current_core->registers[get_register_index(register_name1)],
-                    current_core->registers[get_register_index(register_name2)],
-                    p->type);
-    }
-
-    // Atualiza o registrador de destino com o resultado
-    current_core->registers[get_register_index(register_name1)] = result;
-
-    // Mostra a operação executada
-    show_cpu_execution(current_core - cpu->core,
-                      current_core->current_process->pid,
-                      p->instruction,
-                      current_core->PC);
-
-    free(instruction_copy);
-    unlock_core(current_core);
-    return result;
-}
-
-
-
 void init_cpu(cpu* cpu) {
     cpu->core = malloc(NUM_CORES * sizeof(core));
     if (cpu->core == NULL) {
@@ -143,80 +73,61 @@ void unlock_scheduler(cpu* cpu) {
 
 void control_unit(cpu* cpu, instruction_pipe* p) {
     core* current_core = get_current_core(cpu);
-    if (!current_core || !current_core->current_process) return;
-
-    int core_id = current_core - cpu->core;
-    PCB* process = current_core->current_process;
-
-    show_cpu_execution(core_id, process->pid, p->instruction, process->PC);
-
-    if (check_quantum_expired(cpu, core_id)) {
-        show_process_state(process->pid, "RUNNING", "READY");
-        handle_preemption(cpu, core_id);
+    if (current_core == NULL) {
+        printf("Error: No active core found for control unit\n");
         return;
     }
 
-    lock_core(current_core);
+    printf("Debug - Executing instruction: '%s' (Type: %d)\n", p->instruction, p->type);
+
+    if (p->type == LOAD) {
+        load(cpu, p->instruction);
+        printf("Debug - LOAD executed\n");
+    } else if (p->type == STORE) {
+        store(cpu, p->mem_ram, p->instruction);
+        printf("Debug - STORE executed\n");
+    }
+
+    // Verifica se o quantum expirou antes de executar a instrução
+    if (check_quantum_expired(cpu, current_core - cpu->core)) {
+        handle_preemption(cpu, current_core - cpu->core);
+        return;
+    }
+
     p->result = 0;
+    lock_core(current_core);
 
-    switch (p->type) {
-        case LOAD:
-            load(cpu, p->instruction);
-            show_memory_operation(process->pid, "LOAD", process->PC);
-            p->num_instruction++;
-            break;
-
-        case STORE:
-            store(cpu, p->mem_ram, p->instruction);
-            show_memory_operation(process->pid, "STORE", process->PC);
-            p->num_instruction++;
-            break;
-
-        case ADD:
-        case SUB:
-        case MUL:
-        case DIV:
-            p->result = execute_arithmetic(cpu, p);
-            p->num_instruction++;
-            break;
-
-        case IF:
-            if_i(cpu, p);
-            p->num_instruction++;
-            break;
-
-        case I_END:
-            if_end(p);
-            p->num_instruction++;
-            break;
-
-        case ELSE:
-            else_i(cpu, p);
-            p->num_instruction++;
-            break;
-
-        case ELS_END:
-            else_end(p);
-            p->num_instruction++;
-            break;
-
-        case LOOP:
-            loop(cpu, p);
-            p->num_instruction++;
-            break;
-
-        case L_END:
-            loop_end(cpu, p);
-            break;
-
-        case INVALID:
-            show_process_state(process->pid, "RUNNING", "ERROR");
-            process->state = FINISHED;
-            break;
-
-        default:
-            p->num_instruction++;
-            break;
+    if (p->type == ADD) {
+        p->result = add(cpu, p->instruction);
+        p->num_instruction++;
+    } else if (p->type == SUB) {
+        p->result = sub(cpu, p->instruction);
+        p->num_instruction++;
+    } else if (p->type == MUL) {
+        p->result = mul(cpu, p->instruction);
+        p->num_instruction++;
+    } else if (p->type == DIV) {
+        p->result = div_c(cpu, p->instruction);
+        p->num_instruction++;
+    } else if (p->type == LOOP) {
+        loop(cpu, p);
+        p->num_instruction++;
+    } else if (p->type == L_END) {
+        loop_end(cpu, p);
+    } else if(p->type == IF) {
+        if_i(cpu, p);
+        p->num_instruction++;
+    } else if(p->type == I_END) {
+        if_end(p);
+        p->num_instruction++;
+    } else if(p->type == ELSE) {
+        else_i(cpu, p);
+        p->num_instruction++;
+    } else if(p->type == ELS_END) {
+        else_end(p);
+        p->num_instruction++;
+    } else {
+        p->num_instruction++;
     }
 
     unlock_core(current_core);
@@ -250,7 +161,7 @@ void load(cpu* cpu, char* instruction) {
     value = atoi(token);
 
     current_core->registers[get_register_index(register_name)] = value;
-    
+
     free(instruction_copy);
     unlock_core(current_core);
 }
@@ -269,18 +180,35 @@ void store(cpu* cpu, ram* memory_ram, char* instruction) {
     register_name = strtok(NULL, " ");
     address_str = strtok(NULL, " ");
 
-    // Verifica operação de I/O
+    // Verifica se é um acesso de I/O (A250)
     if (address_str && strcmp(address_str, "A250") == 0) {
+        printf("Process %d blocked for I/O operation (STORE to A250) at PC: %d\n",
+               current_process->pid, current_process->PC);
+
         lock_scheduler(cpu);
 
-        // Bloqueia processo
-        show_process_state(current_process->pid, "RUNNING", "BLOCKED");
+        // Marca processo como bloqueado por I/O
         current_process->has_io = true;
         current_process->blocked_time = 0;
         current_process->state = BLOCKED;
 
+        // Salva o contexto atual
         save_context(current_process, current_core);
-        cpu->process_manager->blocked_queue[cpu->process_manager->blocked_count++] = current_process;
+
+        // Adiciona à fila de bloqueados se ainda não estiver nela
+        bool already_blocked = false;
+        for (int i = 0; i < cpu->process_manager->blocked_count; i++) {
+            if (cpu->process_manager->blocked_queue[i] == current_process) {
+                already_blocked = true;
+                break;
+            }
+        }
+
+        if (!already_blocked) {
+            cpu->process_manager->blocked_queue[cpu->process_manager->blocked_count++] = current_process;
+        }
+
+        // Libera o core
         release_core(cpu, current_core - cpu->core);
 
         unlock_scheduler(cpu);
@@ -288,9 +216,8 @@ void store(cpu* cpu, ram* memory_ram, char* instruction) {
         return;
     }
 
-    // Operação normal de memória
+    // Para outros endereços, procede normalmente...
     lock_core(current_core);
-
     unsigned short int register_value = current_core->registers[get_register_index(register_name)];
     char buffer[10];
     sprintf(buffer, "%d", register_value);
@@ -299,8 +226,8 @@ void store(cpu* cpu, ram* memory_ram, char* instruction) {
     memset(&memory_ram->vector[address], 0, strlen(buffer));
     strcpy(&memory_ram->vector[address], buffer);
 
-    show_memory_operation(current_process->pid, "STORE", address);
-    
+    printf("STORE: Writing value %d to address %s\n", register_value, address_str);
+
     unlock_core(current_core);
     free(instruction_copy);
 }
@@ -520,7 +447,7 @@ void if_i(cpu* cpu, instruction_pipe* p) {
             p->type = cpu_decode(cpu, p->instruction, p->num_instruction);
 
             instruction_copy = strdup(p->instruction);
-            token = strtok(instruction_copy, " "); 
+            token = strtok(instruction_copy, " ");
 
             if (strcmp(token, "I_END") == 0)
                 break;
@@ -654,7 +581,7 @@ type_of_instruction cpu_decode(cpu* cpu, char* instruction, unsigned short int n
     unlock_core(current_core);
 
     if (type == INVALID) {
-        exit(1);    
+        exit(1);
     }
     return type;
 }
@@ -706,37 +633,36 @@ void assign_process_to_core(cpu* cpu, PCB* process, int core_id) {
     unlock_core(&cpu->core[core_id]);
 }
 
-
 // Enhanced process release
 void release_core(cpu* cpu, int core_id) {
     if (core_id < 0 || core_id >= NUM_CORES) {
         printf("Warning: Invalid core_id in release_core\n");
         return;
     }
-    
+
     lock_core(&cpu->core[core_id]);
-    
+
     core* current_core = &cpu->core[core_id];
     if (current_core->current_process) {
         PCB* process = current_core->current_process;
         process_state prev_state = process->state;
-        
-        printf("Releasing Core %d - Process %d (Previous State: %s)\n", 
+
+        printf("Releasing Core %d - Process %d (Previous State: %s)\n",
                core_id, process->pid, state_to_string(prev_state));
-        
+
         // Não tenta salvar contexto se o processo terminou
         if (prev_state != FINISHED) {
             save_context(process, current_core);
         }
-        
+
         // Limpa o core
         current_core->is_available = true;
         current_core->quantum_remaining = 0;
         current_core->current_process = NULL;
-        
+
         printf("Core %d is now available\n", core_id);
     }
-    
+
     unlock_core(current_core);
 }
 
@@ -756,9 +682,9 @@ bool check_quantum_expired(cpu* cpu, int core_id) {
     if (core_id < 0 || core_id >= NUM_CORES) {
         return false;
     }
-    
-    core* current_core = &cpu->core[core_id];    
-    return current_core->current_process != NULL && 
+
+    core* current_core = &cpu->core[core_id];
+    return current_core->current_process != NULL &&
            current_core->quantum_remaining <= 0;
 }
 
@@ -766,10 +692,10 @@ void handle_preemption(cpu* cpu, int core_id) {
     if (core_id < 0 || core_id >= NUM_CORES) {
         return;
     }
-    
+
     lock_scheduler(cpu);
     lock_core(&cpu->core[core_id]);
-    
+
     core* current_core = &cpu->core[core_id];
     if (current_core->current_process != NULL) {
         PCB* current_process = current_core->current_process;
@@ -777,7 +703,7 @@ void handle_preemption(cpu* cpu, int core_id) {
         current_process->state = READY;
         cpu->process_manager->ready_queue[cpu->process_manager->ready_count++] = current_process;
     }
-    
+
     unlock_core(current_core);
     unlock_scheduler(cpu);
 }
@@ -790,37 +716,33 @@ void* core_execution_thread(void* arg) {
     int core_id = args->core_id;
     core* current_core = &cpu->core[core_id];
 
-    show_cores_state(NUM_CORES, NULL);  // Mostra estado inicial dos cores
+    printf("Core %d thread started\n", core_id);
 
     while (current_core->running) {
         lock_core(current_core);
 
         if (!current_core->is_available && current_core->current_process != NULL) {
-            PCB* process = current_core->current_process;
-
-            // Verifica quantum
             if (check_quantum_expired(cpu, core_id)) {
-                show_process_state(process->pid, "RUNNING", "READY");
                 handle_preemption(cpu, core_id);
                 unlock_core(current_core);
                 continue;
             }
 
-            // Executa instrução
             instruction_pipe pipe_data = {0};
             char* instruction = cpu_fetch(cpu, memory_ram);
 
-            if (instruction) {
+            if (instruction != NULL) {
                 pipe_data.instruction = instruction;
                 pipe_data.type = cpu_decode(cpu, instruction, current_core->PC);
                 pipe_data.mem_ram = memory_ram;
                 pipe_data.num_instruction = current_core->PC;
 
-                show_cpu_execution(core_id, process->pid, instruction, current_core->PC);
                 control_unit(cpu, &pipe_data);
+
+                printf("Core %d executed instruction at PC %d (Quantum: %d)\n",
+                       core_id, current_core->PC - 1, current_core->quantum_remaining);
             } else {
-                show_process_state(process->pid, "RUNNING", "FINISHED");
-                current_core->current_process->state = FINISHED;
+                current_core->current_process->state = READY;
                 current_core->is_available = true;
                 current_core->current_process = NULL;
             }
@@ -830,6 +752,7 @@ void* core_execution_thread(void* arg) {
         usleep(1000);
     }
 
+    printf("Core %d thread finished\n", core_id);
     free(arg);
     return NULL;
 }
