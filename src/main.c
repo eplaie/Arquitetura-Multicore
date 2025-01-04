@@ -192,6 +192,9 @@ int main(void) {
     show_os_banner();
     printf("Inicializando sistema...\n");
 
+    int core_pids[NUM_CORES];
+    memset(core_pids, -1, sizeof(core_pids)); 
+
     // Configuração inicial
     SystemConfig config;
     initialize_system(&config);
@@ -229,26 +232,36 @@ int main(void) {
         check_blocked_processes(cpu);
 
         // Escalonamento
-        if (cpu->process_manager->ready_count > 0) {
-            printf("\nEscalonando processos da fila de prontos (%d processos)\n",
-                  cpu->process_manager->ready_count);
-
-            for (int core_id = 0; core_id < NUM_CORES; core_id++) {
-                if (cpu->core[core_id].is_available) {
-                    schedule_next_process(cpu, core_id);
+            bool scheduled_this_cycle = false;
+    for (int core_id = 0; core_id < NUM_CORES; core_id++) {
+        if (cpu->core[core_id].is_available) {
+            if (!scheduled_this_cycle) {
+                // Conta processos realmente prontos
+                int ready_count = count_ready_processes(cpu->process_manager);
+                if (ready_count > 0) {
+                    printf("\nEscalonando processos da fila de prontos (%d processos)\n", ready_count);
+                    scheduled_this_cycle = true;
                 }
             }
+            schedule_next_process(cpu, core_id);
         }
+    }
 
-        // Execução nos cores
-        int core_pids[NUM_CORES] = {-1};  // -1 indica core ocioso
-        for (int core_id = 0; core_id < NUM_CORES; core_id++) {
-            if (!cpu->core[core_id].is_available && cpu->core[core_id].current_process != NULL) {
-                PCB* current_process = cpu->core[core_id].current_process;
-                core_pids[core_id] = current_process->pid;
-                execute_pipeline_cycle(arch_state, cpu, memory_ram, core_id, cycle_count);
-            }
+    // Executa ciclo em cada core
+    for (int core_id = 0; core_id < NUM_CORES; core_id++) {
+        if (!cpu->core[core_id].is_available && 
+            cpu->core[core_id].current_process != NULL) {
+            execute_pipeline_cycle(arch_state, cpu, memory_ram, core_id, cycle_count);
         }
+    }
+
+        for (int i = 0; i < NUM_CORES; i++) {
+        if (!cpu->core[i].is_available && cpu->core[i].current_process) {
+            core_pids[i] = cpu->core[i].current_process->pid;
+        } else {
+            core_pids[i] = -1;
+        }
+    }
 
         // Mostra estado do sistema
         show_cores_state(NUM_CORES, core_pids);
