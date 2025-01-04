@@ -3,7 +3,7 @@
 
 #define NUM_CORES 4
 #define NUM_REGISTERS 32
-#define DEFAULT_QUANTUM 6
+#define DEFAULT_QUANTUM 4
 
 #include "libs.h"
 #include "interpreter.h"
@@ -84,6 +84,9 @@ void assign_process_to_core(cpu* cpu, PCB* process, int core_id);
 void release_core(cpu* cpu, int core_id);
 bool check_quantum_expired(cpu* cpu, int core_id);
 void handle_preemption(cpu* cpu, int core_id);
+
+core* get_current_core(cpu* cpu);
+core* get_specific_core(cpu* cpu, int target_core_id);
 
 // Funções de gerenciamento de threads
 void* core_execution_thread(void* arg);

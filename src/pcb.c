@@ -51,16 +51,21 @@ PCB* create_process(ProcessManager* pm) {
     pcb->core_id = -1;
     pcb->quantum = pm->quantum_size;
     pcb->has_io = false;
-
-    // Inicializa novos campos
     pcb->total_instructions = 0;
     pcb->cycles_executed = 0;
     pcb->was_completed = false;
 
+    pcb->using_resource = false;
+    pcb->resource_address = -1;
+    pcb->blocked_by_pid = -1;
+
+    // Inicialização dos novos campos
+    pcb->recovery_count = 0;
+    pcb->had_violations = false;
+
     // Adiciona ao array global
     all_processes[total_processes++] = pcb;
 
-    // Resto da inicialização...
     return pcb;
 }
 
@@ -109,55 +114,110 @@ bool check_program_running(cpu* cpu) {
 }
 
 void schedule_next_process(cpu* cpu, int core_id) {
+    if (!cpu || !cpu->process_manager) {
+        printf("Error: Invalid CPU or process manager\n");
+        return;
+    }
+
+    if (core_id < 0 || core_id >= NUM_CORES) {
+        printf("Error: Invalid core ID %d\n", core_id);
+        return;
+    }
+
+    // Verifica se há processos para escalonar
     if (cpu->process_manager->ready_count <= 0) {
         show_scheduler_state(0, cpu->process_manager->blocked_count);
         return;
     }
 
-    lock_scheduler(cpu);
-    PCB* next_process = cpu->process_manager->ready_queue[0];
+    // Verifica se o core está realmente disponível
+    if (!cpu->core[core_id].is_available) {
+        printf("Warning: Core %d is not available for scheduling\n", core_id);
+        return;
+    }
 
-    // Reorganiza fila de prontos
+    lock_scheduler(cpu);
+
+    // Verifica novamente após obter o lock
+    if (cpu->process_manager->ready_count <= 0) {
+        unlock_scheduler(cpu);
+        return;
+    }
+
+    // Obtém o próximo processo
+    PCB* next_process = cpu->process_manager->ready_queue[0];
+    if (!next_process) {
+        printf("Error: NULL process in ready queue\n");
+        unlock_scheduler(cpu);
+        return;
+    }
+
+    // Remove o processo da fila de prontos
     for (int i = 0; i < cpu->process_manager->ready_count - 1; i++) {
         cpu->process_manager->ready_queue[i] = cpu->process_manager->ready_queue[i + 1];
     }
+    cpu->process_manager->ready_queue[cpu->process_manager->ready_count - 1] = NULL;
     cpu->process_manager->ready_count--;
 
-    // Atribui ao core
-    if (cpu->core[core_id].is_available) {
-        assign_process_to_core(cpu, next_process, core_id);
-        show_process_state(next_process->pid, "READY", "RUNNING");
-
-        // Mostra estado atualizado do escalonador
-        show_scheduler_state(cpu->process_manager->ready_count,
-                           cpu->process_manager->blocked_count);
+    // Se o processo já está em algum core, libera
+    for (int i = 0; i < NUM_CORES; i++) {
+        if (cpu->core[i].current_process == next_process) {
+            release_core(cpu, i);
+        }
     }
+
+    // Atribui ao novo core
+    lock_core(&cpu->core[core_id]);
+    cpu->core[core_id].current_process = next_process;
+    cpu->core[core_id].quantum_remaining = cpu->process_manager->quantum_size;
+    cpu->core[core_id].PC = next_process->PC;
+    cpu->core[core_id].is_available = false;
+    next_process->state = RUNNING;
+    next_process->core_id = core_id;
+    unlock_core(&cpu->core[core_id]);
+
+    show_process_state(next_process->pid, "READY", "RUNNING");
+    show_scheduler_state(cpu->process_manager->ready_count, 
+                        cpu->process_manager->blocked_count);
+
     unlock_scheduler(cpu);
 }
-
 
 void check_blocked_processes(cpu* cpu) {
     if (!cpu || !cpu->process_manager) {
         return;
     }
 
+    lock_scheduler(cpu);
     ProcessManager* pm = cpu->process_manager;
 
     for (int i = 0; i < pm->blocked_count; i++) {
-        PCB* process = pm->blocked_queue[i];
+        PCB* blocked_process = pm->blocked_queue[i];
+        if (!blocked_process) continue;
 
-        if (!process) continue;
+        // Verifica se o recurso está disponível
+        bool resource_available = true;
+        if (blocked_process->resource_address == 250) {  // I/O Resource
+            // Verifica se o processo que bloqueava ainda está usando o recurso
+            for (int j = 0; j < total_processes; j++) {
+                PCB* process = all_processes[j];
+                if (process && process->pid == blocked_process->blocked_by_pid &&
+                    process->state != FINISHED && process->using_resource) {
+                    resource_available = false;
+                    break;
+                }
+            }
+        }
 
-        // Simula término da operação de I/O após alguns ciclos
-        if (process->has_io && process->cycles_executed > 2) {
-            printf("I/O completed for Process %d\n", process->pid);
-            process->has_io = false;
-            process->state = READY;
-
-            lock_scheduler(cpu);
+        if (resource_available) {
+            printf("I/O completed for Process %d\n", blocked_process->pid);
+            blocked_process->using_resource = false;
+            blocked_process->resource_address = -1;
+            blocked_process->blocked_by_pid = -1;
+            blocked_process->state = READY;
 
             // Move para fila de prontos
-            pm->ready_queue[pm->ready_count++] = process;
+            pm->ready_queue[pm->ready_count++] = blocked_process;
 
             // Remove da fila de bloqueados
             for (int j = i; j < pm->blocked_count - 1; j++) {
@@ -166,9 +226,24 @@ void check_blocked_processes(cpu* cpu) {
             pm->blocked_count--;
             i--; // Ajusta índice após remoção
 
-            unlock_scheduler(cpu);
-
-            printf("Process %d moved from BLOCKED to READY\n", process->pid);
+            printf("Process %d moved from BLOCKED to READY\n", blocked_process->pid);
         }
     }
+
+    unlock_scheduler(cpu);
+}
+
+bool check_resource_available(cpu* cpu __attribute__((unused)), 
+                            int address, 
+                            int requesting_pid __attribute__((unused))) {
+    // Verifica se algum processo está usando o recurso
+    for (int i = 0; i < total_processes; i++) {
+        PCB* process = all_processes[i];
+        if (process && process->using_resource && 
+            process->resource_address == address &&
+            process->state != FINISHED) {
+            return false;
+        }
+    }
+    return true;
 }

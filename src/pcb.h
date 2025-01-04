@@ -21,18 +21,23 @@ typedef struct PCB {
     process_state state;
     int priority;
     int PC;
-    int core_id;
-    int quantum;
     int base_address;
     int memory_limit;
+    int core_id;
+    int quantum;
     bool has_io;
+    int blocked_time;
+    int total_instructions;
+    int cycles_executed;
+    bool was_completed;
     unsigned short int* registers;
-  
-    
-    int total_instructions;  
-    int cycles_executed;     
-    bool was_completed;      
-    int blocked_time;        
+    // Novos campos para tratamento de erro
+    int recovery_count;    // Contador de recuperações
+    bool had_violations;   // Flag para indicar violações de memória
+
+    bool using_resource;    // Indica se está usando algum recurso
+    int resource_address;   // Endereço do recurso sendo usado
+    int blocked_by_pid;     // PID do processo que está bloqueando este
 } PCB;
 
 // Gerenciador de Processos
@@ -68,5 +73,6 @@ void save_context(PCB* pcb, core* core);
 void restore_context(PCB* pcb, core* core);
 bool check_program_running(cpu* cpu);
 void check_blocked_processes(cpu* cpu);
+bool check_resource_available(cpu* cpu, int address, int requesting_pid);
 
 #endif

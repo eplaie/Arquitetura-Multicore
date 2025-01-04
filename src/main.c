@@ -4,9 +4,9 @@
 #include <unistd.h>
 #include <stdbool.h>
 
-#define DEFAULT_QUANTUM 6
+#define DEFAULT_QUANTUM 4
 #define BASE_ADDRESS_OFFSET 0
-#define MAX_CYCLES 13
+#define MAX_CYCLES 10
 #define SLEEP_INTERVAL 10000  // Reduzido para 10ms
 
 

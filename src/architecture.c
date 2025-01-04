@@ -81,7 +81,7 @@ void execute_pipeline_cycle(architecture_state* state __attribute__((unused)),
         printf("\n[Process %d] ✓ Completed", current_process->pid);
         printf("\n├── Instructions: %d", current_process->total_instructions);
         printf("\n└── Cycle: %d\n", cycle_count);
-
+        
         lock_scheduler(cpu);
         current_process->state = FINISHED;
         current_process->was_completed = true;
@@ -101,9 +101,9 @@ void execute_pipeline_cycle(architecture_state* state __attribute__((unused)),
     );
 
     if (!instruction || strlen(instruction) == 0) {
-        printf("\n[Process %d] ✓ Finished at cycle %d\n",
+        printf("\n[Process %d] ✓ Finished at cycle %d\n", 
                current_process->pid, cycle_count);
-
+        
         lock_scheduler(cpu);
         current_process->state = FINISHED;
         current_process->was_completed = true;
@@ -131,7 +131,7 @@ void execute_pipeline_cycle(architecture_state* state __attribute__((unused)),
 
     printf("\n[Process State Update]");
     printf("\n├── PC: %d → %d", current_process->PC, current_process->PC + 1);
-    printf("\n├── Quantum: %d → %d",
+    printf("\n├── Quantum: %d → %d", 
            current_core->quantum_remaining, current_core->quantum_remaining - 1);
     printf("\n└── Cycle: %d\n", cycle_count);
 
@@ -142,7 +142,7 @@ void execute_pipeline_cycle(architecture_state* state __attribute__((unused)),
     if (current_core->quantum_remaining <= 0) {
         printf("\n[Scheduler] Quantum expired for Process %d", current_process->pid);
         printf("\n└── Moving to ready queue at cycle %d\n", cycle_count);
-
+        
         lock_scheduler(cpu);
         current_process->state = READY;
         cpu->process_manager->ready_queue[cpu->process_manager->ready_count++] = current_process;
