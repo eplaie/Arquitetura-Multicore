@@ -1,5 +1,7 @@
 #ifndef ARCHITECTURE_H
 #define ARCHITECTURE_H
+#define DEFAULT_QUANTUM 4
+#define MAX_CYCLES 13
 
 #include "common_types.h"
 #include "disc.h"

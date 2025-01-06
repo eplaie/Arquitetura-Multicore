@@ -1,9 +1,7 @@
 #ifndef CPU_H
 #define CPU_H
-
 #define NUM_CORES 4
 #define NUM_REGISTERS 32
-#define DEFAULT_QUANTUM 4
 
 #include "libs.h"
 #include "interpreter.h"

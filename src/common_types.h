@@ -1,6 +1,9 @@
 #ifndef COMMON_TYPES_H
 #define COMMON_TYPES_H
 
+#define MAX_PROCESSES 10
+
+
 #include "libs.h"
 
 // Forward declarations
@@ -20,9 +23,6 @@ typedef struct pipeline pipeline;
 typedef struct pipeline_stage pipeline_stage;
 typedef struct peripherals peripherals;
 
-#define DEFAULT_QUANTUM 4
-#define MAX_CYCLES 13
-#define SLEEP_INTERVAL 10000
-#define MAX_PROCESSES 10
+
 
 #endif

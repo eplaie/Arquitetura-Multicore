@@ -7,23 +7,65 @@
 <img align="center" height="20px" width="90px" src="https://img.shields.io/badge/Contributions-welcome-brightgreen.svg?style=flat"/>
 </div>
 <br>
-<p style="font-size:120%;" align="center">
-    <a href="#Introdução">Introdução</a> -
-    <a href="#estrutura do projeto">Estrutura do Projeto</a> -
-    <a href="#arquivos">Arquivos</a> -
-    <a href="#Detalhemento do Código">Detalhemento do Código</a> -
-    <a href="Testes e Análises dos Resultados">Testes e Análises dos Resultados</a> -
-    <a href="#Conclusão">Conclusão</a> -
-    <a href="#Compilação e Execução">Compilação e Execução</a> -
-    <a href="#Contatos">Contatos</a>
-</p>
 
  <div align="justify">
 
+# Desenvolvimento e Implementação de uma Arquitetura Multicore
+
+Nesta segunda etapa do projeto, o objetivo foi implementar o conceito de multicore em nossa estrutura MIPS, considerando todas as particularidades e desafios que um sistema desse tipo exige.
+
+## Conceitos Abordados
+
+### Multicore
+
+Inicialmente, nosso simulador operava como um sistema *single-core*, ou seja, contava com apenas um núcleo de processamento de instruções, sendo capaz de processar apenas uma instrução por ciclo.
+
+Com a implementação da estrutura *multicore*, o simulador agora suporta "n" núcleos, cujo número pode ser especificado pelo usuário. Isso possibilita o processamento simultâneo de múltiplas instruções provenientes de diferentes programas. Contudo, essa nova capacidade traz desafios adicionais, como o gerenciamento de **preempção** e outros tópicos abordados a seguir.
+
+### Preempção
+
+A preempção é a capacidade do sistema de interromper a execução de um processo em andamento, sem que ele colabore, para alocar o processador a outro processo, geralmente de maior prioridade. Essa interrupção é temporária, permitindo que o processo interrompido retome sua execução posteriormente, do ponto onde parou.
+
+No simulador, a preempção está diretamente relacionada ao conceito de *quantum*. Quando o *quantum* de um processo chega a zero, ele é bloqueado, permitindo que outro processo na fila utilize o processador. O *quantum* de cada processo pode ser configurado pelo usuário.
+
+### Process Control Block (PCB)
+
+O *Process Control Block* (PCB) é uma estrutura de dados essencial em sistemas operacionais. Ele contém informações fundamentais sobre cada processo, como estado, dados de controle e contexto de execução. O PCB funciona como um "retrato" do processo, permitindo que o sistema operacional gerencie e monitore cada processo de maneira eficiente.
+
+## Variáveis Importantes
+
+### `DEFAULT_QUANTUM`
+
+O `DEFAULT_QUANTUM` define a quantidade de *quantum* atribuída aos processos. Esse parâmetro é crucial para o conceito de **preempção**, pois, quando o *quantum* de um processo chega a zero, ele é bloqueado, permitindo que outro processo na fila seja executado.
+
+Para modificar o valor de `DEFAULT_QUANTUM`, edite o arquivo `architecture.h`, linha 3:
+
+```c
+#define DEFAULT_QUANTUM 4
+```
+### `MAX_CYCLES`
+
+A variável `MAX_CYCLES` define a quantidade máxima de ciclos que o sistema pode executar.
+
+- Localizado no arquivo `architecture.h`, linha 4:
+
+```c
+#define MAX_CYCLES 10
+```
+### `NUM_CORES`
+
+A variável `NUM_CORES` refere-se à quantidade de núcleos que serão utilizados pelo sistema.  
+A modificação dessa variável pode ser feita de maneira simples.
+
+- Localizado no arquivo `cpu.h`, linha 4:
+
+```c
+#define NUM_CORES 4
+```
 
 ## Estrutura do Projeto
 
-  De uma forma compacta e organizada, os arquivos e diretórios estão dispostos da seguinte forma:
+De uma forma compacta e organizada, os arquivos e diretórios estão dispostos da seguinte forma:
 
   ```.
   |
@@ -51,40 +93,40 @@
   │   │   └── uthash.h
   ```
 
-  ### Arquivos
-  
+### Arquivos
+
   <div align="justify">
-  
-  Para a solução proposta os seguintes diretórios/funções foram utilizados: 
-  
-  - `dataset/program.txt` Arquivo em que se encontra as instruções de _entrada_; em txt.
-  - `src/architecture.c`  Arquivo que inicializa componentes como CPU, RAM, disco e periféricos; carrega um programa na RAM, verificando se o tamanho é compatível com a capacidade da memória. Em seguida, verifica as instruções na RAM e realiza um pipeline de execução, onde cada instrução é buscada, decodificada, executada e, em seguida, os resultados são escritos de volta. 
-  - `src/architecture.h`Funções principais para inicializar componentes (CPU, RAM, disco e periféricos)
-  - `src/cache.c` Operações de gerenciamento de cache usando uma tabela hash. Ele permite adicionar `(add_cache)` e buscar `(search_cache)` entradas de cache com base no endereço, removê-las (remove_cache), exibir todo o conteúdo do cache `(print_cache)` e esvaziar a cache completamente `(empty_cache)`.
-  - `src/cache.h` Estrutura básica para o gerenciamento de cache,  biblioteca `uthash` para criação e manipulação de uma tabela hash.
-  - `src/cpu.c`  Implementa operações fundamentais para um emulador de CPU, incluindo a inicialização da CPU e de seus núcleos, execução de operações aritméticas por meio de uma unidade lógica aritmética (ULA), e manipulação de instruções para carregar e armazenar dados em registradores e memória RAM.
-  - `src/cpu.h` Define a estrutura da CPU e de seus núcleos.
-  - `src/disc.c` Inicialização de um "disco de memória", todos os valores são inicializados com zero, o que prepara o "disco" para ser utilizado em operações de leitura e escrita.
-  - `src/disc.h` Define uma estrutura e uma função para gerenciar uma simulação de disco de memória.
-  - `src/interpreter.c`  Uma implementação de um interpretador simples para um conjunto de instruções em uma "simulação" de um processador.
-  - `src/interpreter.h`  Fornece as definições e declarações necessárias para validar e interpretar as instruções.
-  - `src/libs.h` Arquivo de inclusão das bibliotecas utilizadas nos arquivos do sistema.
-  - `src/main.c` Função principal que inicializa a arquitetura do sistema, incluindo a CPU, RAM, disco e periféricos. Ele carrega um programa em RAM a partir de um arquivo de entrada (dataset/program.txt), verifica as instruções carregadas, e inicia o pipeline de execução do programa. Após a execução, a função exibe o conteúdo da RAM e libera a memória alocada.
-  - `src/peripherals.c` Inicializa os periféricos do sistema, configurando valores iniciais, como o valor de entrada, que é definido como zero.
-  - `src/peripherals.h`Define a estrutura básica dos periféricos do sistema, incluindo o valor de entrada.
-  - `src/pipeline.c` Implementa as etapas do pipeline de execução de instruções, incluindo busca (instruction_fetch), decodificação (instruction_decode), execução (execute), acesso à memória (memory_access) e escrita dos resultados (write_back). Cada etapa interage com a CPU e a RAM para processar instruções, gerenciar operações de carga e armazenamento, e atualizar registradores com os resultados das operações aritméticas.
-  - `src/pipeline.h`  Declara as funções principais para o pipeline de execução de instruções, incluindo busca, decodificação, execução, acesso à memória e escrita de resultados.
-  - `src/ram.c` Gerencia a inicialização e exibição do conteúdo da RAM. A função init_ram aloca memória para a RAM e inicializa cada posição com um caractere nulo ('\0'). A função print_ram exibe o conteúdo atual da RAM.
-  - `src/ram.h` Define a estrutura e funções para o gerenciamento da memória RAM, incluindo a alocação e exibição de conteúdo. Especifica um tamanho máximo para a RAM (NUM_MEMORY) e declara as funções init_ram e print_ram.
-  - `src/reader.c` Implementa funções para ler e manipular um programa a partir de um arquivo.
-  - `src/reader.h`  Declara funções para a leitura e manipulação de um programa, incluindo a leitura do conteúdo de um arquivo (read_program), a extração de uma linha específica (get_line_of_program), a contagem do número total de linhas (count_lines), e a contagem do número de tokens em uma linha (count_tokens_in_line).
-  - `src/uthash.h`  Implementação de tabelas hash em C.
+
+Para a solução proposta os seguintes diretórios/funções foram utilizados:
+
+- `dataset/program.txt` Arquivo em que se encontra as instruções de _entrada_; em txt.
+- `src/architecture.c`  Arquivo que inicializa componentes como CPU, RAM, disco e periféricos; carrega um programa na RAM, verificando se o tamanho é compatível com a capacidade da memória. Em seguida, verifica as instruções na RAM e realiza um pipeline de execução, onde cada instrução é buscada, decodificada, executada e, em seguida, os resultados são escritos de volta.
+- `src/architecture.h`Funções principais para inicializar componentes (CPU, RAM, disco e periféricos)
+- `src/cache.c` Operações de gerenciamento de cache usando uma tabela hash. Ele permite adicionar `(add_cache)` e buscar `(search_cache)` entradas de cache com base no endereço, removê-las (remove_cache), exibir todo o conteúdo do cache `(print_cache)` e esvaziar a cache completamente `(empty_cache)`.
+- `src/cache.h` Estrutura básica para o gerenciamento de cache,  biblioteca `uthash` para criação e manipulação de uma tabela hash.
+- `src/cpu.c`  Implementa operações fundamentais para um emulador de CPU, incluindo a inicialização da CPU e de seus núcleos, execução de operações aritméticas por meio de uma unidade lógica aritmética (ULA), e manipulação de instruções para carregar e armazenar dados em registradores e memória RAM.
+- `src/cpu.h` Define a estrutura da CPU e de seus núcleos.
+- `src/disc.c` Inicialização de um "disco de memória", todos os valores são inicializados com zero, o que prepara o "disco" para ser utilizado em operações de leitura e escrita.
+- `src/disc.h` Define uma estrutura e uma função para gerenciar uma simulação de disco de memória.
+- `src/interpreter.c`  Uma implementação de um interpretador simples para um conjunto de instruções em uma "simulação" de um processador.
+- `src/interpreter.h`  Fornece as definições e declarações necessárias para validar e interpretar as instruções.
+- `src/libs.h` Arquivo de inclusão das bibliotecas utilizadas nos arquivos do sistema.
+- `src/main.c` Função principal que inicializa a arquitetura do sistema, incluindo a CPU, RAM, disco e periféricos. Ele carrega um programa em RAM a partir de um arquivo de entrada (dataset/program.txt), verifica as instruções carregadas, e inicia o pipeline de execução do programa. Após a execução, a função exibe o conteúdo da RAM e libera a memória alocada.
+- `src/peripherals.c` Inicializa os periféricos do sistema, configurando valores iniciais, como o valor de entrada, que é definido como zero.
+- `src/peripherals.h`Define a estrutura básica dos periféricos do sistema, incluindo o valor de entrada.
+- `src/pipeline.c` Implementa as etapas do pipeline de execução de instruções, incluindo busca (instruction_fetch), decodificação (instruction_decode), execução (execute), acesso à memória (memory_access) e escrita dos resultados (write_back). Cada etapa interage com a CPU e a RAM para processar instruções, gerenciar operações de carga e armazenamento, e atualizar registradores com os resultados das operações aritméticas.
+- `src/pipeline.h`  Declara as funções principais para o pipeline de execução de instruções, incluindo busca, decodificação, execução, acesso à memória e escrita de resultados.
+- `src/ram.c` Gerencia a inicialização e exibição do conteúdo da RAM. A função init_ram aloca memória para a RAM e inicializa cada posição com um caractere nulo ('\0'). A função print_ram exibe o conteúdo atual da RAM.
+- `src/ram.h` Define a estrutura e funções para o gerenciamento da memória RAM, incluindo a alocação e exibição de conteúdo. Especifica um tamanho máximo para a RAM (NUM_MEMORY) e declara as funções init_ram e print_ram.
+- `src/reader.c` Implementa funções para ler e manipular um programa a partir de um arquivo.
+- `src/reader.h`  Declara funções para a leitura e manipulação de um programa, incluindo a leitura do conteúdo de um arquivo (read_program), a extração de uma linha específica (get_line_of_program), a contagem do número total de linhas (count_lines), e a contagem do número de tokens em uma linha (count_tokens_in_line).
+- `src/uthash.h`  Implementação de tabelas hash em C.
 
 ## Detalhemento do Código e Lógica Utilizada
 
 #### Instruções
- A execução de instruções em um sistema baseado na arquitetura de Von Neumann segue um ciclo característico, conhecido como ciclo de instrução. Esse ciclo consiste em quatro fases:
- Busca (Fetch): A unidade de controle busca a próxima instrução na memória principal.
+A execução de instruções em um sistema baseado na arquitetura de Von Neumann segue um ciclo característico, conhecido como ciclo de instrução. Esse ciclo consiste em quatro fases:
+Busca (Fetch): A unidade de controle busca a próxima instrução na memória principal.
 
 * Decodificação (Decode): A instrução é decodificada para que a unidade de controle compreenda qual operação deve ser realizada.
 
@@ -92,7 +134,7 @@
 
 * Armazenamento (Store): O resultado da execução pode ser armazenado de volta na memória ou em outro local apropriado.
 
- | Instrução | Descrição                                                                                  | Observações                       |
+| Instrução | Descrição                                                                                  | Observações                       |
 |-----------|--------------------------------------------------------------------------------------------|-----------------------------------|
 | `LOAD`    | Carrega um valor de uma posição de memória para um registrador.                            | ---                               |
 | `STORE`   | Armazena o valor de um registrador em uma posição de memória.                              | ---                               |
