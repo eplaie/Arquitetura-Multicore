@@ -20,7 +20,7 @@ Nesta segunda etapa do projeto, o objetivo foi implementar o conceito de multico
 
 Inicialmente, nosso simulador operava como um sistema *single-core*, ou seja, contava com apenas um núcleo de processamento de instruções, sendo capaz de processar apenas uma instrução por ciclo.
 
-Com a implementação da estrutura *multicore*, o simulador agora suporta "n" núcleos, cujo número pode ser especificado pelo usuário. Isso possibilita o processamento simultâneo de múltiplas instruções provenientes de diferentes programas. Contudo, essa nova capacidade traz desafios adicionais, como o gerenciamento de **preempção** e outros tópicos abordados a seguir.
+Com a implementação da estrutura *multicore*, o simulador agora suporta "n" núcleos, cujo número pode ser especificado pelo usuário. Isso possibilita o processamento simultâneo de múltiplas instruções provenientes de diferentes programas. Contudo, essa nova capacidade traz desafios adicionais, como a **preempção** e outros tópicos abordados a seguir.
 
 ### Preempção
 
