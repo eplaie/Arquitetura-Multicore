@@ -252,78 +252,92 @@ void store(cpu* cpu, ram* memory_ram, char* instruction) {
        return;
    }
 
-   unsigned short int register_value = current_core->registers[reg_index];
+      unsigned short int register_value = current_core->registers[reg_index];
    unsigned short int address = atoi(address_str + 1);
 
-   // Verifica se é um acesso a I/O (A250)
-   if (address == 250) {
-       // Verifica se algum outro processo está usando o I/O
-       bool io_in_use = false;
-       int owner_pid = -1;
+if (address == 250) {
+    printf("\nDebug: I/O operation requested by Process %d\n", current_process->pid);
+    
+    // Reseta quantum antes de qualquer outra operação
+    current_core->quantum_remaining = cpu->process_manager->quantum_size;
+    
+    bool io_in_use = false;
+    PCB* owner_process = NULL;
 
-       for (int i = 0; i < total_processes; i++) {
-           PCB* process = all_processes[i];
-           if (process && process->pid != current_process->pid &&
-               process->state != FINISHED && 
-               process->using_resource && process->resource_address == 250) {
-               io_in_use = true;
-               owner_pid = process->pid;
-               break;
-           }
-       }
+    for (int i = 0; i < total_processes; i++) {
+        if (all_processes[i] && all_processes[i]->using_io && 
+            all_processes[i]->pid != current_process->pid) {
+            io_in_use = true;
+            owner_process = all_processes[i];
+            break;
+        }
+    }
 
-       if (io_in_use) {
-           printf("\nProcess %d blocked: I/O resource in use by Process %d\n", 
-                  current_process->pid, owner_pid);
+    if (io_in_use) {
+        printf("\nProcess %d blocked: I/O in use by Process %d\n", 
+               current_process->pid, owner_process->pid);
+        
+        current_process->state = BLOCKED;
+        current_process->io_block_cycles = 2;
+        current_process->using_io = false;
+        
+        cpu->process_manager->blocked_queue[cpu->process_manager->blocked_count++] = current_process;
+        
+        unlock_scheduler(cpu);
+        unlock_core(current_core);
+        free(instruction_copy);
+        
+        release_core(cpu, executing_core_id);
+        return;
+    }
 
-           // Bloqueia o processo
-           current_process->state = BLOCKED;
-           current_process->blocked_by_pid = owner_pid;
-           current_process->resource_address = 250;
+    // Se chegou aqui, pode usar o I/O
+    current_process->using_io = true;
+    printf("\nProcess %d acquired I/O resource\n", current_process->pid);
+    
+    // Simula escrita no I/O
+    char buffer[20];
+    snprintf(buffer, sizeof(buffer), "%d", register_value);
+    memcpy(&memory_ram->vector[address], buffer, strlen(buffer) + 1);
+    printf("STORE: Process %d wrote value %d to I/O\n", 
+           current_process->pid, register_value);
 
-           // Adiciona à fila de bloqueados
-           cpu->process_manager->blocked_queue[cpu->process_manager->blocked_count++] = current_process;
-           
-           free(instruction_copy);
-           unlock_core(current_core);
-           unlock_scheduler(cpu);
-           
-           // Libera o core
-           release_core(cpu, executing_core_id);
-           return;
-       }
-
-       // Reserva o recurso de I/O
-       current_process->using_resource = true;
-       current_process->resource_address = 250;
-       printf("\nProcess %d acquired I/O resource\n", current_process->pid);
-   }
-   // Verifica limites de memória do processo
-   else if (address < current_process->base_address || 
-            address >= (current_process->base_address + current_process->memory_limit)) {
+    // Bloqueia processo
+    current_process->state = BLOCKED;
+    current_process->io_block_cycles = 2;
+    
+    cpu->process_manager->blocked_queue[cpu->process_manager->blocked_count++] = current_process;
+    
+    printf("Process %d will be blocked for 2 cycles\n", current_process->pid);
+    
+    unlock_scheduler(cpu);
+    unlock_core(current_core);
+    free(instruction_copy);
+    
+    release_core(cpu, executing_core_id);
+    return;
+}
+   
+   // Se não é I/O, verifica limites de memória
+   if (address < current_process->base_address || 
+       address >= (current_process->base_address + current_process->memory_limit)) {
        printf("Warning: Memory access violation for process %d - address %d outside bounds [%d, %d]\n",
               current_process->pid, address, 
               current_process->base_address,
               current_process->base_address + current_process->memory_limit);
 
-       // Recupera usando endereço seguro
+       // Recupera usando endereço base
        address = current_process->base_address;
        printf("Recovery: Redirecting write to safe address %d\n", address);
-       
-       // Atualiza estatísticas de recuperação
-       current_process->recovery_count++;
-       current_process->had_violations = true;
    }
 
    // Realiza a escrita na memória
+   printf("STORE: Process %d wrote value %d to address A%d\n", 
+          current_process->pid, register_value, address);
+
    char buffer[20];
-   int len = snprintf(buffer, sizeof(buffer), "%d", register_value);
-   if (len > 0 && address + len < NUM_MEMORY) {
-       memset(&memory_ram->vector[address], 0, len + 1);
-       strcpy(&memory_ram->vector[address], buffer);
-       printf("STORE: Process %d wrote value %d to address A%d\n", 
-              current_process->pid, register_value, address);
-   }
+   snprintf(buffer, sizeof(buffer), "%d", register_value);
+   memcpy(&memory_ram->vector[address], buffer, strlen(buffer) + 1);
 
    free(instruction_copy);
    unlock_core(current_core);
@@ -771,28 +785,21 @@ void release_core(cpu* cpu, int core_id) {
         PCB* process = current_core->current_process;
         process_state prev_state = process->state;
 
-        // Não libera o core se o processo está em estado de erro
-        if (process->state == FINISHED || process->state == READY) {
-            printf("Releasing Core %d - Process %d (Previous State: %s)\n",
-                   core_id, process->pid, state_to_string(prev_state));
-
-            // Salva contexto apenas se necessário
+        // Não marca como FINISHED se estiver BLOCKED
+        if (process->state != BLOCKED) {
+            // Salva contexto se necessário
             if (prev_state != FINISHED) {
                 save_context(process, current_core);
             }
-
-            // Limpa o core
-            current_core->is_available = true;
-            current_core->quantum_remaining = 0;
-            current_core->current_process = NULL;
-            memset(current_core->registers, 0, NUM_REGISTERS * sizeof(unsigned short int));
-
-            printf("Core %d is now available\n", core_id);
-        } else {
-            // Se o processo está em estado de erro, apenas marca como finalizado
-            process->state = FINISHED;
-            printf("Process %d marked as finished due to error\n", process->pid);
         }
+
+        // Limpa o core
+        current_core->is_available = true;
+        current_core->quantum_remaining = 0;
+        current_core->current_process = NULL;
+        memset(current_core->registers, 0, NUM_REGISTERS * sizeof(unsigned short int));
+
+        printf("Core %d is now available\n", core_id);
     }
 
     unlock_core(current_core);

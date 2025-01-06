@@ -58,6 +58,8 @@ PCB* create_process(ProcessManager* pm) {
     pcb->using_resource = false;
     pcb->resource_address = -1;
     pcb->blocked_by_pid = -1;
+    pcb->using_io = false;
+    pcb->io_block_cycles = 0;
 
     // Inicialização dos novos campos
     pcb->recovery_count = 0;
@@ -113,80 +115,95 @@ bool check_program_running(cpu* cpu) {
     return false;
 }
 
+void remove_from_ready_queue(ProcessManager* pm, int idx) {
+    for (int i = idx; i < pm->ready_count - 1; i++) {
+        pm->ready_queue[i] = pm->ready_queue[i + 1];
+    }
+    pm->ready_queue[pm->ready_count - 1] = NULL;
+    pm->ready_count--;
+}
+
+int count_ready_processes(ProcessManager* pm) {
+    if (!pm) return 0;
+
+    int ready_count = 0;
+    for (int i = 0; i < pm->ready_count; i++) {
+        PCB* process = pm->ready_queue[i];
+        if (process && process->state != BLOCKED && process->io_block_cycles == 0) {
+            ready_count++;
+        }
+    }
+    return ready_count;
+}
+
+void assign_to_core(cpu* cpu, PCB* process, int core_id) {
+    lock_core(&cpu->core[core_id]);
+    
+    cpu->core[core_id].current_process = process;
+    cpu->core[core_id].quantum_remaining = cpu->process_manager->quantum_size;
+    cpu->core[core_id].PC = process->PC;
+    cpu->core[core_id].is_available = false;
+
+    process->state = RUNNING;
+    process->core_id = core_id;
+    
+    show_process_state(process->pid, "READY", "RUNNING");
+    
+    unlock_core(&cpu->core[core_id]);
+}
+
 void schedule_next_process(cpu* cpu, int core_id) {
-    if (!cpu || !cpu->process_manager) {
-        printf("Error: Invalid CPU or process manager\n");
-        return;
-    }
-
-    if (core_id < 0 || core_id >= NUM_CORES) {
-        printf("Error: Invalid core ID %d\n", core_id);
-        return;
-    }
-
-    // Verifica se há processos para escalonar
-    if (cpu->process_manager->ready_count <= 0) {
-        show_scheduler_state(0, cpu->process_manager->blocked_count);
-        return;
-    }
-
-    // Verifica se o core está realmente disponível
-    if (!cpu->core[core_id].is_available) {
-        printf("Warning: Core %d is not available for scheduling\n", core_id);
-        return;
-    }
+    if (!cpu || !cpu->process_manager) return;
 
     lock_scheduler(cpu);
 
-    // Verifica novamente após obter o lock
-    if (cpu->process_manager->ready_count <= 0) {
-        unlock_scheduler(cpu);
-        return;
-    }
+    // Procura primeiro processo que pode ser executado
+    int selected_idx = -1;
+    PCB* next_process = NULL;
 
-    // Obtém o próximo processo
-    PCB* next_process = cpu->process_manager->ready_queue[0];
-    if (!next_process) {
-        printf("Error: NULL process in ready queue\n");
-        unlock_scheduler(cpu);
-        return;
-    }
+    for (int i = 0; i < cpu->process_manager->ready_count; i++) {
+        PCB* process = cpu->process_manager->ready_queue[i];
+        if (!process) continue;
 
-    // Remove o processo da fila de prontos
-    for (int i = 0; i < cpu->process_manager->ready_count - 1; i++) {
-        cpu->process_manager->ready_queue[i] = cpu->process_manager->ready_queue[i + 1];
-    }
-    cpu->process_manager->ready_queue[cpu->process_manager->ready_count - 1] = NULL;
-    cpu->process_manager->ready_count--;
+        // Pula processo se estiver bloqueado
+        if (process->state == BLOCKED || process->io_block_cycles > 0) {
+            continue;
+        }
 
-    // Se o processo já está em algum core, libera
-    for (int i = 0; i < NUM_CORES; i++) {
-        if (cpu->core[i].current_process == next_process) {
-            release_core(cpu, i);
+        // Verifica se já está em execução em algum core
+        bool already_running = false;
+        for (int j = 0; j < NUM_CORES; j++) {
+            if (j != core_id && !cpu->core[j].is_available && 
+                cpu->core[j].current_process == process) {
+                already_running = true;
+                break;
+            }
+        }
+
+        if (!already_running) {
+            next_process = process;
+            selected_idx = i;
+            break;
         }
     }
 
-    // Atribui ao novo core
-    lock_core(&cpu->core[core_id]);
-    cpu->core[core_id].current_process = next_process;
-    cpu->core[core_id].quantum_remaining = cpu->process_manager->quantum_size;
-    cpu->core[core_id].PC = next_process->PC;
-    cpu->core[core_id].is_available = false;
-    next_process->state = RUNNING;
-    next_process->core_id = core_id;
-    unlock_core(&cpu->core[core_id]);
+    // Se não encontrou processo elegível
+    if (!next_process || selected_idx == -1) {
+        unlock_scheduler(cpu);
+        return;
+    }
 
-    show_process_state(next_process->pid, "READY", "RUNNING");
-    show_scheduler_state(cpu->process_manager->ready_count, 
-                        cpu->process_manager->blocked_count);
+    // Remove da fila de prontos e configura
+    remove_from_ready_queue(cpu->process_manager, selected_idx);
+    assign_to_core(cpu, next_process, core_id);
 
     unlock_scheduler(cpu);
 }
 
+
+
 void check_blocked_processes(cpu* cpu) {
-    if (!cpu || !cpu->process_manager) {
-        return;
-    }
+    if (!cpu || !cpu->process_manager) return;
 
     lock_scheduler(cpu);
     ProcessManager* pm = cpu->process_manager;
@@ -195,38 +212,33 @@ void check_blocked_processes(cpu* cpu) {
         PCB* blocked_process = pm->blocked_queue[i];
         if (!blocked_process) continue;
 
-        // Verifica se o recurso está disponível
-        bool resource_available = true;
-        if (blocked_process->resource_address == 250) {  // I/O Resource
-            // Verifica se o processo que bloqueava ainda está usando o recurso
-            for (int j = 0; j < total_processes; j++) {
-                PCB* process = all_processes[j];
-                if (process && process->pid == blocked_process->blocked_by_pid &&
-                    process->state != FINISHED && process->using_resource) {
-                    resource_available = false;
-                    break;
+        if (blocked_process->io_block_cycles > 0) {
+            blocked_process->io_block_cycles--;
+            printf("\nProcess %d I/O block cycles remaining: %d\n", 
+                   blocked_process->pid, blocked_process->io_block_cycles);
+            
+            if (blocked_process->io_block_cycles == 0) {
+                printf("\nProcess %d I/O block completed\n", blocked_process->pid);
+                
+                // Libera o recurso de I/O
+                blocked_process->using_io = false;
+                blocked_process->resource_address = -1;
+                blocked_process->state = READY;
+                
+                // Move para fila de prontos
+                pm->ready_queue[pm->ready_count++] = blocked_process;
+                
+                // Remove da fila de bloqueados
+                for (int j = i; j < pm->blocked_count - 1; j++) {
+                    pm->blocked_queue[j] = pm->blocked_queue[j + 1];
                 }
+                pm->blocked_queue[pm->blocked_count - 1] = NULL;
+                pm->blocked_count--;
+                i--;
+                
+                printf("Process %d moved from BLOCKED to READY\n", 
+                       blocked_process->pid);
             }
-        }
-
-        if (resource_available) {
-            printf("I/O completed for Process %d\n", blocked_process->pid);
-            blocked_process->using_resource = false;
-            blocked_process->resource_address = -1;
-            blocked_process->blocked_by_pid = -1;
-            blocked_process->state = READY;
-
-            // Move para fila de prontos
-            pm->ready_queue[pm->ready_count++] = blocked_process;
-
-            // Remove da fila de bloqueados
-            for (int j = i; j < pm->blocked_count - 1; j++) {
-                pm->blocked_queue[j] = pm->blocked_queue[j + 1];
-            }
-            pm->blocked_count--;
-            i--; // Ajusta índice após remoção
-
-            printf("Process %d moved from BLOCKED to READY\n", blocked_process->pid);
         }
     }
 

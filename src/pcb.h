@@ -38,6 +38,8 @@ typedef struct PCB {
     bool using_resource;    // Indica se está usando algum recurso
     int resource_address;   // Endereço do recurso sendo usado
     int blocked_by_pid;     // PID do processo que está bloqueando este
+    bool using_io;
+    int io_block_cycles; 
 } PCB;
 
 // Gerenciador de Processos
@@ -74,5 +76,8 @@ void restore_context(PCB* pcb, core* core);
 bool check_program_running(cpu* cpu);
 void check_blocked_processes(cpu* cpu);
 bool check_resource_available(cpu* cpu, int address, int requesting_pid);
+void remove_from_ready_queue(ProcessManager* pm, int idx);
+void assign_to_core(cpu* cpu, PCB* process, int core_id);
+int count_ready_processes(ProcessManager* pm);
 
 #endif
