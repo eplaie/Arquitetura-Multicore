@@ -1,4 +1,3 @@
 LOAD AO 20
 ADD A0 5
 STORE A0 A62
-git
