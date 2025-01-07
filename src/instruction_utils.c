@@ -15,7 +15,7 @@ unsigned short int get_register_index(const char* reg_name) {
         }
     }
     
-    printf("Error: Invalid register name.\n");
+    // printf("Error: Invalid register name.\n");
     return 0;
 }
 
