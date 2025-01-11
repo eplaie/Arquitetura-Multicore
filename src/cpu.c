@@ -828,38 +828,23 @@ bool check_quantum_expired(cpu* cpu, int core_id) {
 }
 
 void handle_preemption(cpu* cpu, int core_id) {
-    if (core_id < 0 || core_id >= NUM_CORES) {
-        return;
-    }
+    if (core_id < 0 || core_id >= NUM_CORES) return;
 
     lock_scheduler(cpu);
     lock_core(&cpu->core[core_id]);
 
     core* current_core = &cpu->core[core_id];
-    if (current_core->current_process != NULL) {
+    if (current_core->current_process) {
         PCB* current_process = current_core->current_process;
         
-        // Garante que a última instrução seja completada
-        if (current_process->state == RUNNING) {
-            // Aguarda conclusão da instrução atual
-            while (current_core->PC == current_process->PC) {
-                unlock_core(current_core);
-                usleep(100);  // Pequeno delay
-                lock_core(current_core);
-            }
-        }
-
-        // Atualiza estado e move para fila de prontos
-        if (current_process->state != FINISHED) {
-            current_process->state = READY;
-            save_context(current_process, current_core);
-            cpu->process_manager->ready_queue[cpu->process_manager->ready_count++] = current_process;
-        }
-
-        // Libera o core
-        current_core->is_available = true;
-        current_core->quantum_remaining = 0;
-        current_core->current_process = NULL;
+        // Usa a política atual para tratar quantum expirado
+        cpu->process_manager->current_policy->on_quantum_expired(
+            cpu->process_manager, 
+            current_process
+        );
+        
+        cpu->process_manager->total_preemptions++;
+        release_core(cpu, core_id);
     }
 
     unlock_core(current_core);

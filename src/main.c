@@ -1,17 +1,18 @@
 #include "architecture.h"
 #include "os_display.h"
 #include "pcb.h"
+#include "policies/policy.h"
 #include <unistd.h>
 #include <stdbool.h>
 
 #define SLEEP_INTERVAL 10000  // Reduzido para 10ms
-
 
 typedef struct {
     const char* program_files[3];
     int num_programs;
     int quantum;
     int print_interval;
+    PolicyType policy_type;  // Novo campo para política
 } SystemConfig;
 
 // Protótipos das funções
@@ -155,13 +156,41 @@ void print_system_state(architecture_state* state __attribute__((unused)),
 }
 
 void initialize_system(SystemConfig* config) {
-
     config->program_files[0] = "dataset/program.txt";
     config->program_files[1] = "dataset/program2.txt";
     config->program_files[2] = "dataset/program3.txt";
     config->num_programs = 3;
     config->quantum = DEFAULT_QUANTUM;
     config->print_interval = 10;
+    config->policy_type = POLICY_RR;  // Política padrão
+}
+
+// Nova função para inicializar a política de escalonamento
+void init_scheduling_policy(ProcessManager* pm, PolicyType type) {
+    // Libera política anterior se existir
+    if (pm->current_policy) {
+        free(pm->current_policy);
+    }
+
+    // Cria nova política
+    switch(type) {
+        case POLICY_SJF:
+            pm->current_policy = create_sjf_policy();
+            printf("Política SJF (Shortest Job First) iniciada\n");
+            break;
+        case POLICY_MULTI:
+            pm->current_policy = create_multi_policy();
+            printf("Política Multilevel Queue iniciada\n");
+            break;
+        case POLICY_LOTTERY:
+            pm->current_policy = create_lottery_policy();
+            printf("Política Lottery iniciada\n");
+            break;
+        case POLICY_RR:
+        default:
+            pm->current_policy = create_rr_policy();
+            printf("Política Round Robin iniciada\n");
+    }
 }
 
 void load_all_programs(cpu* cpu, ram* memory_ram, SystemConfig* config) {
@@ -206,12 +235,14 @@ int main(void) {
     // Verifica alocações
     if (!cpu || !memory_ram || !memory_disc || !p || !arch_state) {
         printf("Erro: Falha na alocação de memória\n");
-        // Cleanup...
         return 1;
     }
 
     // Inicialização da arquitetura
     init_architecture(cpu, memory_ram, memory_disc, p, arch_state);
+    
+    // Inicializa política de escalonamento
+    init_scheduling_policy(cpu->process_manager, config.policy_type);
 
     printf("\nCarregando programas...\n");
     load_all_programs(cpu, memory_ram, &config);
@@ -229,36 +260,36 @@ int main(void) {
         check_blocked_processes(cpu);
 
         // Escalonamento
-            bool scheduled_this_cycle = false;
-    for (int core_id = 0; core_id < NUM_CORES; core_id++) {
-        if (cpu->core[core_id].is_available) {
-            if (!scheduled_this_cycle) {
-                // Conta processos realmente prontos
-                int ready_count = count_ready_processes(cpu->process_manager);
-                if (ready_count > 0) {
-                    printf("\nEscalonando processos da fila de prontos (%d processos)\n", ready_count);
-                    scheduled_this_cycle = true;
+        bool scheduled_this_cycle = false;
+        for (int core_id = 0; core_id < NUM_CORES; core_id++) {
+            if (cpu->core[core_id].is_available) {
+                if (!scheduled_this_cycle) {
+                    int ready_count = count_ready_processes(cpu->process_manager);
+                    if (ready_count > 0) {
+                        printf("\nEscalonando processos da fila de prontos (%d processos)\n", ready_count);
+                        scheduled_this_cycle = true;
+                    }
                 }
+                schedule_next_process(cpu, core_id);
             }
-            schedule_next_process(cpu, core_id);
         }
-    }
 
-    // Executa ciclo em cada core
-    for (int core_id = 0; core_id < NUM_CORES; core_id++) {
-        if (!cpu->core[core_id].is_available && 
-            cpu->core[core_id].current_process != NULL) {
-            execute_pipeline_cycle(arch_state, cpu, memory_ram, core_id, cycle_count);
+        // Executa ciclo em cada core
+        for (int core_id = 0; core_id < NUM_CORES; core_id++) {
+            if (!cpu->core[core_id].is_available && 
+                cpu->core[core_id].current_process != NULL) {
+                execute_pipeline_cycle(arch_state, cpu, memory_ram, core_id, cycle_count);
+            }
         }
-    }
 
+        // Atualiza estado dos cores
         for (int i = 0; i < NUM_CORES; i++) {
-        if (!cpu->core[i].is_available && cpu->core[i].current_process) {
-            core_pids[i] = cpu->core[i].current_process->pid;
-        } else {
-            core_pids[i] = -1;
+            if (!cpu->core[i].is_available && cpu->core[i].current_process) {
+                core_pids[i] = cpu->core[i].current_process->pid;
+            } else {
+                core_pids[i] = -1;
+            }
         }
-    }
 
         // Mostra estado do sistema
         show_cores_state(NUM_CORES, core_pids);
@@ -271,7 +302,7 @@ int main(void) {
             printf("\nTodos os processos foram concluídos\n");
         }
 
-        usleep(SLEEP_INTERVAL);  // Atraso para visualização
+        usleep(SLEEP_INTERVAL);
     }
 
     // Resumo final

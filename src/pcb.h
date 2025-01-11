@@ -2,6 +2,7 @@
 #define PCB_H
 
 #include "common_types.h"
+#include "policies/policy.h"
 
 // Enumeração de estados do processo
 typedef enum {
@@ -31,15 +32,22 @@ typedef struct PCB {
     int cycles_executed;
     bool was_completed;
     unsigned short int* registers;
-    // Novos campos para tratamento de erro
     int recovery_count;    // Contador de recuperações
     bool had_violations;   // Flag para indicar violações de memória
 
     bool using_resource;    // Indica se está usando algum recurso
     int resource_address;   // Endereço do recurso sendo usado
-    int blocked_by_pid;     // PID do processo que está bloqueando este
+    int blocked_by_pid;     
     bool using_io;
     int io_block_cycles; 
+
+    int arrival_time;             // Tempo de chegada
+    int start_time;              // Tempo do primeiro uso da CPU
+    int completion_time;         // Tempo de término
+    int estimated_execution_time; // Para SJF
+
+    int queue_level;            // Para Multilevel
+    int tickets;                // Para Lottery
 } PCB;
 
 // Gerenciador de Processos
@@ -50,6 +58,16 @@ struct ProcessManager {
     int blocked_count;
     int next_pid;
     int quantum_size;
+
+    struct Policy* current_policy;
+    
+    // Métricas para comparação
+    int total_context_switches;
+    int total_preemptions;
+    float avg_waiting_time;
+    float avg_turnaround_time;
+    float throughput;
+
 };
 
 // Estrutura para gerenciar programas na memória
