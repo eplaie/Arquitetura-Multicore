@@ -45,14 +45,13 @@ void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, peripherals
     printf("Architecture initialization complete\n");
 }
 
-void init_pipeline_multicore(architecture_state* state, cpu* cpu __attribute__((unused)),
-                           ram* memory_ram __attribute__((unused))) {
-    state->pipeline->current_core = 0;
-    printf("Pipeline initialized with multicore support\n");
-}
+// void init_pipeline_multicore(architecture_state* state, cpu* cpu __attribute__((unused)),
+//                            ram* memory_ram __attribute__((unused))) {
+//     state->pipeline->current_core = 0;
+//     printf("Pipeline initialized with multicore support\n");
+// }
 
-void execute_pipeline_cycle(architecture_state* state __attribute__((unused)),
-                          cpu* cpu, ram* memory_ram, int core_id, int cycle_count) {
+void execute_pipeline_cycle(architecture_state* state __attribute__((unused)),cpu* cpu, ram* memory_ram, int core_id, int cycle_count) {
     printf("\n╔════════════════════════════════════════╗");
     printf("\n║         Pipeline Cycle %-4d            ║", cycle_count);
     printf("\n╚════════════════════════════════════════╝\n");
