@@ -72,24 +72,24 @@ void else_i(cpu* cpu, instruction_pipe* pipe);
 void else_end(instruction_pipe* pipe);
 void loop(cpu* cpu, instruction_pipe* p);
 void loop_end(cpu* cpu, instruction_pipe *p);
-void decrease_pc(cpu* cpu);
+// void decrease_pc(cpu* cpu);
 char* instruc_fetch(cpu* cpu, ram* memory);
 type_of_instruction instruc_decode(cpu* cpu, char* instruction, unsigned short int num_instruction);
 
 // Funções de gerenciamento de processos
-void init_cpu_with_process_manager(cpu* cpu, int quantum_size);
-void assign_process_to_core(cpu* cpu, PCB* process, int core_id);
+// void init_cpu_with_process_manager(cpu* cpu, int quantum_size);
+// void assign_process_to_core(cpu* cpu, PCB* process, int core_id);
 void release_core(cpu* cpu, int core_id);
 bool check_quantum_expired(cpu* cpu, int core_id);
 void handle_preemption(cpu* cpu, int core_id);
 
 core* get_current_core(cpu* cpu);
-core* get_specific_core(cpu* cpu, int target_core_id);
+// core* get_specific_core(cpu* cpu, int target_core_id);
 
 // Funções de gerenciamento de threads
-void* core_execution_thread(void* arg);
-void init_cpu_threads(cpu* cpu, ram* memory_ram, architecture_state* state);
-void cleanup_cpu_threads(cpu* cpu);
+// void* core_execution_thread(void* arg);
+// void init_cpu_threads(cpu* cpu, ram* memory_ram, architecture_state* state);
+// void cleanup_cpu_threads(cpu* cpu);
 
 // Novas funções para sincronização de threads
 void lock_core(core* c);

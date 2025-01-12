@@ -99,33 +99,34 @@ char* get_line_of_program(char* program_start, int line_number) {
     return result;
 }
 
-unsigned short int count_lines(char *program) {
-    unsigned short int count = 0;
+// unsigned short int count_lines(char *program) {
+//     unsigned short int count = 0;
+//
+//     char* program_copy = strdup(program);
+//
+//     char *line = strtok(program_copy, "\n");
+//
+//     while (line != NULL) {
+//         count++;
+//         line = strtok(NULL, "\n");
+//     }
+//
+//     return count;
+// }
 
-    char* program_copy = strdup(program);
+// unsigned short int count_tokens_in_line(char *line) {
+//     unsigned short int count = 0;
+//
+//     char* line_copy = strdup(line);
+//
+//     char *token = strtok(line_copy, " ");
+//
+//     while (token != NULL) {
+//         count++;
+//         token = strtok(NULL, " ");
+//     }
+//
+//     free(line_copy);
+//     return count;
+// }
 
-    char *line = strtok(program_copy, "\n");
-
-    while (line != NULL) {
-        count++;
-        line = strtok(NULL, "\n");
-    }
-
-    return count;
-}
-
-unsigned short int count_tokens_in_line(char *line) {
-    unsigned short int count = 0;
-
-    char* line_copy = strdup(line);
-
-    char *token = strtok(line_copy, " ");
-
-    while (token != NULL) {
-        count++; 
-        token = strtok(NULL, " "); 
-    }
-
-    free(line_copy);
-    return count; 
-}

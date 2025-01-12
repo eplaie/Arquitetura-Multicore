@@ -71,10 +71,10 @@ PCB* create_process(ProcessManager* pm) {
     return pcb;
 }
 
-void set_process_base_address(PCB* pcb, int base_address) {
-    pcb->base_address = base_address;
-    printf("Updated process %d with base address %d\n", pcb->pid, base_address);
-}
+// void set_process_base_address(PCB* pcb, int base_address) {
+//     pcb->base_address = base_address;
+//     printf("Updated process %d with base address %d\n", pcb->pid, base_address);
+// }
 
 void save_context(PCB* pcb, core* cur_core) {
     if (!pcb || !cur_core) {
@@ -88,32 +88,32 @@ void save_context(PCB* pcb, core* cur_core) {
     }
 }
 
-void restore_context(PCB* pcb, core* cur_core) {
-    // Restaura PC relativo
-    cur_core->PC = pcb->PC;
-    memcpy(cur_core->registers, pcb->registers, NUM_REGISTERS * sizeof(unsigned short int));
-}
+// void restore_context(PCB* pcb, core* cur_core) {
+//     // Restaura PC relativo
+//     cur_core->PC = pcb->PC;
+//     memcpy(cur_core->registers, pcb->registers, NUM_REGISTERS * sizeof(unsigned short int));
+// }
 
-bool check_program_running(cpu* cpu) {
-    // Verifica se há processos na fila de prontos
-    if (cpu->process_manager->ready_count > 0) {
-        return true;
-    }
-
-    // Verifica se há processos na fila de bloqueados
-    if (cpu->process_manager->blocked_count > 0) {
-        return true;
-    }
-
-    // Verifica se há processos executando nos cores
-    for (int i = 0; i < NUM_CORES; i++) {
-        if (!cpu->core[i].is_available && cpu->core[i].current_process != NULL) {
-            return true;
-        }
-    }
-
-    return false;
-}
+// bool check_program_running(cpu* cpu) {
+//     // Verifica se há processos na fila de prontos
+//     if (cpu->process_manager->ready_count > 0) {
+//         return true;
+//     }
+//
+//     // Verifica se há processos na fila de bloqueados
+//     if (cpu->process_manager->blocked_count > 0) {
+//         return true;
+//     }
+//
+//     // Verifica se há processos executando nos cores
+//     for (int i = 0; i < NUM_CORES; i++) {
+//         if (!cpu->core[i].is_available && cpu->core[i].current_process != NULL) {
+//             return true;
+//         }
+//     }
+//
+//     return false;
+// }
 
 void remove_from_ready_queue(ProcessManager* pm, int idx) {
     for (int i = idx; i < pm->ready_count - 1; i++) {
@@ -245,17 +245,17 @@ void check_blocked_processes(cpu* cpu) {
     unlock_scheduler(cpu);
 }
 
-bool check_resource_available(cpu* cpu __attribute__((unused)), 
-                            int address, 
-                            int requesting_pid __attribute__((unused))) {
-    // Verifica se algum processo está usando o recurso
-    for (int i = 0; i < total_processes; i++) {
-        PCB* process = all_processes[i];
-        if (process && process->using_resource && 
-            process->resource_address == address &&
-            process->state != FINISHED) {
-            return false;
-        }
-    }
-    return true;
-}
+// bool check_resource_available(cpu* cpu __attribute__((unused)),
+//                             int address,
+//                             int requesting_pid __attribute__((unused))) {
+//     // Verifica se algum processo está usando o recurso
+//     for (int i = 0; i < total_processes; i++) {
+//         PCB* process = all_processes[i];
+//         if (process && process->using_resource &&
+//             process->resource_address == address &&
+//             process->state != FINISHED) {
+//             return false;
+//         }
+//     }
+//     return true;
+// }

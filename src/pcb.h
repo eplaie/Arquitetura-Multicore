@@ -86,12 +86,12 @@ extern int num_programs;
 // Function declarations
 ProcessManager* init_process_manager(int quantum_size);
 PCB* create_process(ProcessManager* pm);
-void set_process_base_address(PCB* pcb, int base_address);
+// void set_process_base_address(PCB* pcb, int base_address);
 void schedule_process(ProcessManager* pm, cpu* cpu);
 void schedule_next_process(cpu* cpu, int core_id);
 void save_context(PCB* pcb, core* core);
-void restore_context(PCB* pcb, core* core);
-bool check_program_running(cpu* cpu);
+// void restore_context(PCB* pcb, core* core);
+// bool check_program_running(cpu* cpu);
 void check_blocked_processes(cpu* cpu);
 bool check_resource_available(cpu* cpu, int address, int requesting_pid);
 void remove_from_ready_queue(ProcessManager* pm, int idx);

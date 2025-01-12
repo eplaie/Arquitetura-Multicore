@@ -154,135 +154,135 @@ void execute_pipeline_cycle(architecture_state* state __attribute__((unused)),cp
     }
 }
 
-void print_execution_summary(architecture_state* state, cpu* cpu, ram* memory_ram, int cycle_count) {
-    printf("\n================ Execution Summary ================\n");
+// void print_execution_summary(architecture_state* state, cpu* cpu, ram* memory_ram, int cycle_count) {
+//     printf("\n================ Execution Summary ================\n");
+//
+//     // Informação sobre ciclos
+//     printf("Status: %s\n",
+//            cycle_count >= MAX_CYCLES ? "Stopped at maximum cycle count" : "Completed all processes");
+//     printf("Total cycles executed: %d\n\n", cycle_count);
+//
+//     // Contadores
+//     int total_instructions = 0;
+//     int processes_completed = 0;
+//     int processes_preempted = 0;
+//     int processes_blocked = 0;
+//
+//     for (int i = 0; i < total_processes; i++) {
+//         PCB* process = all_processes[i];
+//         if (process) {
+//             total_instructions += process->total_instructions;
+//
+//             if (process->was_completed) {
+//                 processes_completed++;
+//                 printf("  Process %d - Completed - Instructions: %d, Cycles: %d\n",
+//                        process->pid, process->total_instructions, process->cycles_executed);
+//             } else if (process->state == BLOCKED) {
+//                 processes_blocked++;
+//             } else if (process->state == READY) {
+//                 processes_preempted++;
+//             }
+//         }
+//     }
+//
+//     // Blocked Queue Statistics
+//     printf("\nBlocked Queue Statistics:\n");
+//     for (int i = 0; i < state->process_manager->blocked_count; i++) {
+//         PCB* process = state->process_manager->blocked_queue[i];
+//         if (process) {
+//             processes_blocked++;
+//             total_instructions += process->PC;
+//             printf("  Process %d - PC: %d, Instructions Executed: %d\n",
+//                    process->pid, process->PC, process->PC);
+//         }
+//     }
+//
+//     // Core Status
+//     printf("\nCore Status:\n");
+//     for (int i = 0; i < NUM_CORES; i++) {
+//         PCB* process = cpu->core[i].current_process;
+//         if (process) {
+//             total_instructions += process->PC;
+//             if (process->state == FINISHED) {
+//                 processes_completed++;
+//             }
+//             printf("  Core %d - Process %d (%s, Instructions: %d)\n",
+//                    i, process->pid, state_to_string(process->state), process->PC);
+//         } else {
+//             printf("  Core %d - Idle\n", i);
+//         }
+//     }
+//
+//     printf("\nProcess Statistics:\n");
+//     printf("  Completed: %d\n", processes_completed);
+//     printf("  Preempted: %d\n", processes_preempted);
+//     printf("  Blocked: %d\n", processes_blocked);
+//     printf("  Total Processes: %d\n", processes_completed + processes_preempted + processes_blocked);
+//
+//     printf("\nExecution Statistics:\n");
+//     printf("  Total Instructions: %d\n", total_instructions);
+//     printf("  Instructions per Cycle (IPC): %.2f\n",
+//            cycle_count > 0 ? (float)total_instructions / cycle_count : 0);
+//     if (processes_completed > 0) {
+//         printf("  Average Instructions per Process: %.2f\n",
+//                (float)total_instructions / processes_completed);
+//     }
+//
+//     printf("\nFinal Memory State:\n");
+//     print_ram(memory_ram);
+//     printf("\n================================================\n");
+// }
 
-    // Informação sobre ciclos
-    printf("Status: %s\n",
-           cycle_count >= MAX_CYCLES ? "Stopped at maximum cycle count" : "Completed all processes");
-    printf("Total cycles executed: %d\n\n", cycle_count);
+//
+// void load_program_on_ram(ram* memory_ram, char* program, int base_address) {
+//     if (!program || !memory_ram->vector) return;
+//
+//     size_t program_len = strlen(program);
+//     printf("Debug - Loading program of length %zu at base %d\n", program_len, base_address);
+//
+//     // Verifica limites de memória
+//     if (base_address + program_len >= NUM_MEMORY) {
+//         printf("Error: Program would exceed RAM capacity\n");
+//         exit(1);
+//     }
+//
+//     // Limpa área de destino
+//     size_t clear_size = program_len + 1;
+//     memset(memory_ram->vector + base_address, 0, clear_size);
+//
+//     // Copia programa
+//     memcpy(memory_ram->vector + base_address, program, program_len);
+//     memory_ram->vector[base_address + program_len] = '\0';
+//
+//     // Verifica conteúdo carregado
+//     printf("Debug - Verifying loaded content at base %d:\n", base_address);
+//     char* first_line = get_line_of_program(memory_ram->vector + base_address, 0);
+//     if (first_line) {
+//         printf("First instruction: '%s'\n", first_line);
+//         free(first_line);
+//     }
+//
+//     // Conta número de linhas
+//     int num_lines = 0;
+//     char* p = memory_ram->vector + base_address;
+//     while (*p) {
+//         if (*p == '\n') num_lines++;
+//         p++;
+//     }
+//     printf("Program loaded with %d instructions\n", num_lines + 1);
+// }
 
-    // Contadores
-    int total_instructions = 0;
-    int processes_completed = 0;
-    int processes_preempted = 0;
-    int processes_blocked = 0;
-
-    for (int i = 0; i < total_processes; i++) {
-        PCB* process = all_processes[i];
-        if (process) {
-            total_instructions += process->total_instructions;
-
-            if (process->was_completed) {
-                processes_completed++;
-                printf("  Process %d - Completed - Instructions: %d, Cycles: %d\n",
-                       process->pid, process->total_instructions, process->cycles_executed);
-            } else if (process->state == BLOCKED) {
-                processes_blocked++;
-            } else if (process->state == READY) {
-                processes_preempted++;
-            }
-        }
-    }
-
-    // Blocked Queue Statistics
-    printf("\nBlocked Queue Statistics:\n");
-    for (int i = 0; i < state->process_manager->blocked_count; i++) {
-        PCB* process = state->process_manager->blocked_queue[i];
-        if (process) {
-            processes_blocked++;
-            total_instructions += process->PC;
-            printf("  Process %d - PC: %d, Instructions Executed: %d\n",
-                   process->pid, process->PC, process->PC);
-        }
-    }
-
-    // Core Status
-    printf("\nCore Status:\n");
-    for (int i = 0; i < NUM_CORES; i++) {
-        PCB* process = cpu->core[i].current_process;
-        if (process) {
-            total_instructions += process->PC;
-            if (process->state == FINISHED) {
-                processes_completed++;
-            }
-            printf("  Core %d - Process %d (%s, Instructions: %d)\n",
-                   i, process->pid, state_to_string(process->state), process->PC);
-        } else {
-            printf("  Core %d - Idle\n", i);
-        }
-    }
-
-    printf("\nProcess Statistics:\n");
-    printf("  Completed: %d\n", processes_completed);
-    printf("  Preempted: %d\n", processes_preempted);
-    printf("  Blocked: %d\n", processes_blocked);
-    printf("  Total Processes: %d\n", processes_completed + processes_preempted + processes_blocked);
-
-    printf("\nExecution Statistics:\n");
-    printf("  Total Instructions: %d\n", total_instructions);
-    printf("  Instructions per Cycle (IPC): %.2f\n",
-           cycle_count > 0 ? (float)total_instructions / cycle_count : 0);
-    if (processes_completed > 0) {
-        printf("  Average Instructions per Process: %.2f\n",
-               (float)total_instructions / processes_completed);
-    }
-
-    printf("\nFinal Memory State:\n");
-    print_ram(memory_ram);
-    printf("\n================================================\n");
-}
-
-
-void load_program_on_ram(ram* memory_ram, char* program, int base_address) {
-    if (!program || !memory_ram->vector) return;
-
-    size_t program_len = strlen(program);
-    printf("Debug - Loading program of length %zu at base %d\n", program_len, base_address);
-
-    // Verifica limites de memória
-    if (base_address + program_len >= NUM_MEMORY) {
-        printf("Error: Program would exceed RAM capacity\n");
-        exit(1);
-    }
-
-    // Limpa área de destino
-    size_t clear_size = program_len + 1;
-    memset(memory_ram->vector + base_address, 0, clear_size);
-
-    // Copia programa
-    memcpy(memory_ram->vector + base_address, program, program_len);
-    memory_ram->vector[base_address + program_len] = '\0';
-
-    // Verifica conteúdo carregado
-    printf("Debug - Verifying loaded content at base %d:\n", base_address);
-    char* first_line = get_line_of_program(memory_ram->vector + base_address, 0);
-    if (first_line) {
-        printf("First instruction: '%s'\n", first_line);
-        free(first_line);
-    }
-
-    // Conta número de linhas
-    int num_lines = 0;
-    char* p = memory_ram->vector + base_address;
-    while (*p) {
-        if (*p == '\n') num_lines++;
-        p++;
-    }
-    printf("Program loaded with %d instructions\n", num_lines + 1);
-}
-
-void check_instructions_on_ram(ram* memory_ram) {
-    char* line;
-    unsigned short int num_line = 0;
-    unsigned short int num = count_lines(memory_ram->vector);
-
-    while (num_line < num) {
-        line = get_line_of_program(memory_ram->vector, num_line);
-        verify_instruction(line, num_line);
-        num_line++;
-    }
-}
+// void check_instructions_on_ram(ram* memory_ram) {
+//     char* line;
+//     unsigned short int num_line = 0;
+//     unsigned short int num = count_lines(memory_ram->vector);
+//
+//     while (num_line < num) {
+//         line = get_line_of_program(memory_ram->vector, num_line);
+//         verify_instruction(line, num_line);
+//         num_line++;
+//     }
+// }
 
 void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, peripherals* peripherals, architecture_state* state) {
     // Libera ProcessManager
@@ -341,3 +341,4 @@ void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, peripherals
     // Libera o estado
     free(state);
 }
+
