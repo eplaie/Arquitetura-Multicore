@@ -1,12 +1,12 @@
 #include "reader.h"
 
-char* read_program(const char *filename) {
+char* read_program(const char* filename) {
     if (!filename) {
         printf("Error: NULL filename\n");
         return NULL;
     }
 
-    FILE *arq = fopen(filename, "r");
+    FILE* arq = fopen(filename, "r");
     if (arq == NULL) {
         printf("Error opening file: %s\n", filename);
         return NULL;
@@ -24,7 +24,7 @@ char* read_program(const char *filename) {
     }
 
     // Aloca memória para o conteúdo + caractere nulo
-    char *program = (char*)malloc(fsize + 1);
+    char* program = (char*)malloc(fsize + 1);
     if (program == NULL) {
         printf("Error: Memory allocation failed for program\n");
         fclose(arq);
@@ -45,7 +45,7 @@ char* read_program(const char *filename) {
     return program;
 }
 
-char* get_line_of_program(char* program_start, int line_number) {
+char* get_line_of_program(char* program_start, unsigned short int line_number) {
     if (!program_start) {
         printf("\n╔═══ Program Status ═══╗");
         printf("\n║ Error: Null Pointer ║");
@@ -54,17 +54,17 @@ char* get_line_of_program(char* program_start, int line_number) {
     }
 
     printf("\n╔═══ Program Read Operation ═══╗");
-    printf("\n├── Line: %d", line_number);
+    printf("\n├── Line: %hu", line_number);
     printf("\n├── Address: %p", (void*)program_start);
     printf("\n└── Content Preview: %.30s\n", program_start);
 
     // Encontra a linha desejada
     char* current = program_start;
-    int current_line = 0;
+    unsigned short int current_line = 0;
 
     while (current_line < line_number) {
         if (*current == '\0') {
-            printf("\n[Program Status] End reached at line %d\n", current_line);
+            printf("\n[Program Status] End reached at line %hu\n", current_line);
             return NULL;
         }
         if (*current == '\n') {
@@ -99,34 +99,38 @@ char* get_line_of_program(char* program_start, int line_number) {
     return result;
 }
 
-// unsigned short int count_lines(char *program) {
-//     unsigned short int count = 0;
-//
-//     char* program_copy = strdup(program);
-//
-//     char *line = strtok(program_copy, "\n");
-//
-//     while (line != NULL) {
-//         count++;
-//         line = strtok(NULL, "\n");
-//     }
-//
-//     return count;
-// }
+unsigned short int count_tokens_in_line(char* line) {
+    if (!line) return 0;
+    
+    unsigned short int count = 0;
+    char* line_copy = strdup(line);
+    char* token;
+    char* saveptr;
+    
+    token = strtok_r(line_copy, " ", &saveptr);
+    while (token != NULL) {
+        count++;
+        token = strtok_r(NULL, " ", &saveptr);
+    }
+    
+    free(line_copy);
+    return count;
+}
 
-// unsigned short int count_tokens_in_line(char *line) {
-//     unsigned short int count = 0;
-//
-//     char* line_copy = strdup(line);
-//
-//     char *token = strtok(line_copy, " ");
-//
-//     while (token != NULL) {
-//         count++;
-//         token = strtok(NULL, " ");
-//     }
-//
-//     free(line_copy);
-//     return count;
-// }
-
+/* Função comentada - pode ser reativada se necessário
+unsigned short int count_lines(char* program) {
+    if (!program) return 0;
+    
+    unsigned short int count = 0;
+    char* program_copy = strdup(program);
+    char* line = strtok(program_copy, "\n");
+    
+    while (line != NULL) {
+        count++;
+        line = strtok(NULL, "\n");
+    }
+    
+    free(program_copy);
+    return count;
+}
+*/

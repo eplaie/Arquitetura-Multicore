@@ -1,7 +1,8 @@
 #include "architecture.h"
 #include "os_display.h"
 
-void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, peripherals* peripherals, architecture_state* state) {
+void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, 
+                      peripherals* peripherals, architecture_state* state) {
     if (!cpu || !memory_ram || !memory_disc || !peripherals || !state) {
         printf("Error: NULL pointer in init_architecture\n");
         exit(1);
@@ -9,304 +10,127 @@ void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, peripherals
 
     // Inicializa memória RAM primeiro
     memory_ram->vector = (char*)calloc(NUM_MEMORY, sizeof(char));
-    if (memory_ram->vector == NULL) {
+    if (!memory_ram->vector) {
         printf("Failed to allocate RAM memory\n");
         exit(1);
     }
 
-    // Inicializa CPU
+    // Inicializa CPU e threads
     init_cpu(cpu);
-    printf("CPU initialized with %d cores\n", NUM_CORES);
+    show_thread_status(-1, "CPU initialized");
 
-    // Inicializa disco
+    // Inicializa disco e periféricos
     init_disc(memory_disc);
-    printf("Disc initialized\n");
-
-    // Inicializa periféricos
     init_peripherals(peripherals);
-    printf("Peripherals initialized\n");
 
     // Inicializa estado da arquitetura
     state->pipeline = malloc(sizeof(pipeline));
-    if (state->pipeline == NULL) {
+    if (!state->pipeline) {
         printf("Failed to allocate pipeline\n");
         exit(1);
     }
     init_pipeline(state->pipeline);
-    printf("Pipeline initialized\n");
 
     // Inicializa gerenciador de processos
     state->process_manager = init_process_manager(DEFAULT_QUANTUM);
     state->program_running = true;
-    printf("Process manager initialized\n");
+    state->cycle_count = 0;
+    
+    // Inicializa métricas
+    state->total_instructions = 0;
+    state->completed_processes = 0;
+    state->blocked_processes = 0;
+    state->context_switches = 0;
+    state->avg_turnaround = 0;
+
+    // Inicializa mutex global
+    pthread_mutex_init(&state->global_mutex, NULL);
 
     // Configura CPU para trabalhar com o process manager
     cpu->process_manager = state->process_manager;
-    printf("Architecture initialization complete\n");
-}
 
-// void init_pipeline_multicore(architecture_state* state, cpu* cpu __attribute__((unused)),
-//                            ram* memory_ram __attribute__((unused))) {
-//     state->pipeline->current_core = 0;
-//     printf("Pipeline initialized with multicore support\n");
-// }
-
-void execute_pipeline_cycle(architecture_state* state __attribute__((unused)),cpu* cpu, ram* memory_ram, int core_id, int cycle_count) {
-    printf("\n╔════════════════════════════════════════╗");
-    printf("\n║         Pipeline Cycle %-4d            ║", cycle_count);
-    printf("\n╚════════════════════════════════════════╝\n");
-
-    core* current_core = &cpu->core[core_id];
-    if (!current_core) {
-        printf("\n[ERROR] Invalid core\n");
-        return;
-    }
-
-    PCB* current_process = current_core->current_process;
-    if (!current_process) {
-        printf("\n[Core %d] Idle - No active process\n", core_id);
-        return;
-    }
-
-    printf("\n[Process Details] PID %d on Core %d", current_process->pid, core_id);
-    printf("\n├── PC: %d", current_process->PC);
-    printf("\n├── Base Address: %d", current_process->base_address);
-    printf("\n├── Memory Limit: %d", current_process->memory_limit);
-    printf("\n├── Quantum: %d", current_core->quantum_remaining);
-    printf("\n└── Cycles: %d\n", cycle_count);
-
-    // Verifica se o processo terminou
-    if (current_process->PC >= current_process->memory_limit) {
-        printf("\n[Process %d] ✓ Completed", current_process->pid);
-        printf("\n├── Instructions: %d", current_process->total_instructions);
-        printf("\n└── Cycle: %d\n", cycle_count);
-        
-        lock_scheduler(cpu);
-        current_process->state = FINISHED;
-        current_process->was_completed = true;
-        current_process->total_instructions = current_process->PC;
-        current_process->cycles_executed = cycle_count;
-        release_core(cpu, core_id);
-        unlock_scheduler(cpu);
-        return;
-    }
-
-    char* instruction = NULL;
-    printf("\n[Pipeline Stage] Fetch");
-
-    instruction = get_line_of_program(
-        memory_ram->vector + current_process->base_address,
-        current_process->PC
-    );
-
-    if (!instruction || strlen(instruction) == 0) {
-        printf("\n[Process %d] ✓ Finished at cycle %d\n", 
-               current_process->pid, cycle_count);
-        
-        lock_scheduler(cpu);
-        current_process->state = FINISHED;
-        current_process->was_completed = true;
-        current_process->cycles_executed = cycle_count;
-        release_core(cpu, core_id);
-        unlock_scheduler(cpu);
-        if (instruction) {
-            free(instruction);
+    // Inicializa threads dos cores
+    for (int i = 0; i < NUM_CORES; i++) {
+        core_thread_args* args = malloc(sizeof(core_thread_args));
+        if (!args) {
+            printf("Failed to allocate thread arguments for core %d\n", i);
+            exit(1);
         }
-        return;
+
+        args->cpu = cpu;
+        args->memory_ram = memory_ram;
+        args->core_id = i;
+        args->state = state;
+        cpu->core[i].arch_state = state;
+
+        // Cria a thread do core
+        if (pthread_create(&cpu->core[i].thread, NULL, core_execution_thread, args) != 0) {
+            printf("Failed to create thread for core %d\n", i);
+            exit(1);
+        }
+        show_thread_status(i, "Created");
     }
 
-    printf("\n├── Fetched: '%s'", instruction);
-    current_process->total_instructions++;
-
-    printf("\n└── Executing: %s\n", instruction);
-
-    if (strncmp(instruction, "LOAD", 4) == 0) {
-        load(cpu, instruction);
-    } else if (strncmp(instruction, "STORE", 5) == 0) {
-        store(cpu, memory_ram, instruction);
-    } else if (strncmp(instruction, "ADD", 3) == 0) {
-        add(cpu, instruction);
-    }
-
-    printf("\n[Process State Update]");
-    printf("\n├── PC: %d → %d", current_process->PC, current_process->PC + 1);
-    printf("\n├── Quantum: %d → %d", 
-           current_core->quantum_remaining, current_core->quantum_remaining - 1);
-    printf("\n└── Cycle: %d\n", cycle_count);
-
-    current_process->PC++;
-    current_core->quantum_remaining--;
-    current_process->cycles_executed = cycle_count;
-
-    if (current_core->quantum_remaining <= 0) {
-        printf("\n[Scheduler] Quantum expired for Process %d", current_process->pid);
-        printf("\n└── Moving to ready queue at cycle %d\n", cycle_count);
-        
-        lock_scheduler(cpu);
-        current_process->state = READY;
-        cpu->process_manager->ready_queue[cpu->process_manager->ready_count++] = current_process;
-        release_core(cpu, core_id);
-        unlock_scheduler(cpu);
-    }
-
-    if (instruction) {
-        free(instruction);
-    }
+    show_system_start();
 }
 
-// void print_execution_summary(architecture_state* state, cpu* cpu, ram* memory_ram, int cycle_count) {
-//     printf("\n================ Execution Summary ================\n");
-//
-//     // Informação sobre ciclos
-//     printf("Status: %s\n",
-//            cycle_count >= MAX_CYCLES ? "Stopped at maximum cycle count" : "Completed all processes");
-//     printf("Total cycles executed: %d\n\n", cycle_count);
-//
-//     // Contadores
-//     int total_instructions = 0;
-//     int processes_completed = 0;
-//     int processes_preempted = 0;
-//     int processes_blocked = 0;
-//
-//     for (int i = 0; i < total_processes; i++) {
-//         PCB* process = all_processes[i];
-//         if (process) {
-//             total_instructions += process->total_instructions;
-//
-//             if (process->was_completed) {
-//                 processes_completed++;
-//                 printf("  Process %d - Completed - Instructions: %d, Cycles: %d\n",
-//                        process->pid, process->total_instructions, process->cycles_executed);
-//             } else if (process->state == BLOCKED) {
-//                 processes_blocked++;
-//             } else if (process->state == READY) {
-//                 processes_preempted++;
-//             }
-//         }
-//     }
-//
-//     // Blocked Queue Statistics
-//     printf("\nBlocked Queue Statistics:\n");
-//     for (int i = 0; i < state->process_manager->blocked_count; i++) {
-//         PCB* process = state->process_manager->blocked_queue[i];
-//         if (process) {
-//             processes_blocked++;
-//             total_instructions += process->PC;
-//             printf("  Process %d - PC: %d, Instructions Executed: %d\n",
-//                    process->pid, process->PC, process->PC);
-//         }
-//     }
-//
-//     // Core Status
-//     printf("\nCore Status:\n");
-//     for (int i = 0; i < NUM_CORES; i++) {
-//         PCB* process = cpu->core[i].current_process;
-//         if (process) {
-//             total_instructions += process->PC;
-//             if (process->state == FINISHED) {
-//                 processes_completed++;
-//             }
-//             printf("  Core %d - Process %d (%s, Instructions: %d)\n",
-//                    i, process->pid, state_to_string(process->state), process->PC);
-//         } else {
-//             printf("  Core %d - Idle\n", i);
-//         }
-//     }
-//
-//     printf("\nProcess Statistics:\n");
-//     printf("  Completed: %d\n", processes_completed);
-//     printf("  Preempted: %d\n", processes_preempted);
-//     printf("  Blocked: %d\n", processes_blocked);
-//     printf("  Total Processes: %d\n", processes_completed + processes_preempted + processes_blocked);
-//
-//     printf("\nExecution Statistics:\n");
-//     printf("  Total Instructions: %d\n", total_instructions);
-//     printf("  Instructions per Cycle (IPC): %.2f\n",
-//            cycle_count > 0 ? (float)total_instructions / cycle_count : 0);
-//     if (processes_completed > 0) {
-//         printf("  Average Instructions per Process: %.2f\n",
-//                (float)total_instructions / processes_completed);
-//     }
-//
-//     printf("\nFinal Memory State:\n");
-//     print_ram(memory_ram);
-//     printf("\n================================================\n");
-// }
+void update_system_metrics(architecture_state* state) {
+    pthread_mutex_lock(&state->global_mutex);
+    
+    // Calcula tempo médio de turnaround
+    float total_turnaround = 0;
+    int completed = 0;
+    
+    for (int i = 0; i < total_processes; i++) {
+        if (all_processes[i] && all_processes[i]->was_completed) {
+            total_turnaround += all_processes[i]->cycles_executed;
+            completed++;
+        }
+    }
+    
+    if (completed > 0) {
+        state->avg_turnaround = total_turnaround / completed;
+    }
+    
+    pthread_mutex_unlock(&state->global_mutex);
+}
 
-//
-// void load_program_on_ram(ram* memory_ram, char* program, int base_address) {
-//     if (!program || !memory_ram->vector) return;
-//
-//     size_t program_len = strlen(program);
-//     printf("Debug - Loading program of length %zu at base %d\n", program_len, base_address);
-//
-//     // Verifica limites de memória
-//     if (base_address + program_len >= NUM_MEMORY) {
-//         printf("Error: Program would exceed RAM capacity\n");
-//         exit(1);
-//     }
-//
-//     // Limpa área de destino
-//     size_t clear_size = program_len + 1;
-//     memset(memory_ram->vector + base_address, 0, clear_size);
-//
-//     // Copia programa
-//     memcpy(memory_ram->vector + base_address, program, program_len);
-//     memory_ram->vector[base_address + program_len] = '\0';
-//
-//     // Verifica conteúdo carregado
-//     printf("Debug - Verifying loaded content at base %d:\n", base_address);
-//     char* first_line = get_line_of_program(memory_ram->vector + base_address, 0);
-//     if (first_line) {
-//         printf("First instruction: '%s'\n", first_line);
-//         free(first_line);
-//     }
-//
-//     // Conta número de linhas
-//     int num_lines = 0;
-//     char* p = memory_ram->vector + base_address;
-//     while (*p) {
-//         if (*p == '\n') num_lines++;
-//         p++;
-//     }
-//     printf("Program loaded with %d instructions\n", num_lines + 1);
-// }
+void check_system_state(architecture_state* state, cpu* cpu) {
+    pthread_mutex_lock(&state->global_mutex);
+    
+    int running = 0, ready = 0, blocked = 0;
+    
+    // Conta processos em cada estado
+    ready = cpu->process_manager->ready_count;
+    blocked = cpu->process_manager->blocked_count;
+    
+    for (int i = 0; i < NUM_CORES; i++) {
+        if (!cpu->core[i].is_available && 
+            cpu->core[i].current_process && 
+            cpu->core[i].current_process->state == RUNNING) {
+            running++;
+        }
+    }
+    
+    // Atualiza estado do sistema
+    state->blocked_processes = blocked;
+    state->program_running = (running + ready + blocked) > 0;
+    
+    pthread_mutex_unlock(&state->global_mutex);
+    
+    // Mostra estado atual
+    show_scheduler_state(ready, blocked);
+}
 
-// void check_instructions_on_ram(ram* memory_ram) {
-//     char* line;
-//     unsigned short int num_line = 0;
-//     unsigned short int num = count_lines(memory_ram->vector);
-//
-//     while (num_line < num) {
-//         line = get_line_of_program(memory_ram->vector, num_line);
-//         verify_instruction(line, num_line);
-//         num_line++;
-//     }
-// }
-
-void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, peripherals* peripherals, architecture_state* state) {
+void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, 
+                      peripherals* peripherals, architecture_state* state) {
+    // Cleanup das threads primeiro
+    cleanup_cpu_threads(cpu);
+    
     // Libera ProcessManager
     if (state->process_manager) {
-        // Libera PCBs na fila de prontos
-        for (int i = 0; i < state->process_manager->ready_count; i++) {
-            if (state->process_manager->ready_queue[i]) {
-                if (state->process_manager->ready_queue[i]->registers) {
-                    free(state->process_manager->ready_queue[i]->registers);
-                }
-                free(state->process_manager->ready_queue[i]);
-            }
-        }
+        // Limpa filas
         free(state->process_manager->ready_queue);
-
-        // Libera PCBs na fila de bloqueados
-        for (int i = 0; i < state->process_manager->blocked_count; i++) {
-            if (state->process_manager->blocked_queue[i]) {
-                if (state->process_manager->blocked_queue[i]->registers) {
-                    free(state->process_manager->blocked_queue[i]->registers);
-                }
-                free(state->process_manager->blocked_queue[i]);
-            }
-        }
         free(state->process_manager->blocked_queue);
         free(state->process_manager);
     }
@@ -316,8 +140,9 @@ void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, peripherals
         free(state->pipeline);
     }
 
-    // Libera as estruturas básicas
+    // Libera memória e outros componentes
     if (memory_ram) {
+        free(memory_ram->vector);
         free(memory_ram);
     }
     if (memory_disc) {
@@ -326,19 +151,17 @@ void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, peripherals
     if (peripherals) {
         free(peripherals);
     }
-    if (cpu) {
-        for (int i = 0; i < NUM_CORES; i++) {
-            if (cpu->core[i].registers) {
-                free(cpu->core[i].registers);
-            }
-        }
-        if (cpu->core) {
-            free(cpu->core);
-        }
-        free(cpu);
-    }
 
-    // Libera o estado
+    // Libera mutex global
+    pthread_mutex_destroy(&state->global_mutex);
+
+    // Libera estado
     free(state);
-}
 
+    // Libera PCBs
+    for (int i = 0; i < total_processes; i++) {
+        if (all_processes[i]) {
+            free_pcb(all_processes[i]);
+        }
+    }
+}

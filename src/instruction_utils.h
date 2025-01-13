@@ -1,23 +1,36 @@
 #ifndef INSTRUCTION_UTILS_H
 #define INSTRUCTION_UTILS_H
 
-#include "libs.h"
+#include "common_types.h"
 #include "cpu.h"
 #include "ram.h"
-#include "interpreter.h"
+#include "reader.h"
 
-// Forward declarations para evitar dependência circular
-struct cpu;
-struct instruction_pipe;
-
-// Funções auxiliares para instruções
+// Funções de operações básicas
 unsigned short int get_register_index(const char* reg_name);
 unsigned short int ula(unsigned short int operating_a, unsigned short int operating_b, type_of_instruction operation);
 unsigned short int verify_address(ram* memory_ram, char* address, unsigned short int num_positions);
 
+// Funções de instrução
+void load(cpu* cpu, const char* instruction, unsigned short int index_core);
+void store(cpu* cpu, ram* memory_ram, const char* instruction, unsigned short int index_core);
+unsigned short int add(cpu* cpu, const char* instruction, unsigned short int index_core);
+unsigned short int sub(cpu* cpu, const char* instruction, unsigned short int index_core);
+unsigned short int mul(cpu* cpu, const char* instruction, unsigned short int index_core);
+unsigned short int div_c(cpu* cpu, const char* instruction, unsigned short int index_core);
+
 // Funções de controle de fluxo
-void if_end(struct instruction_pipe* pipe);
-void else_i(struct cpu* cpu, struct instruction_pipe* pipe);
-void else_end(struct instruction_pipe* pipe);
+void if_i(cpu* cpu, char* program, instruction_processor* pipe, unsigned short int index_core);  // Removido const
+void if_end(instruction_processor* pipe);
+void else_i(cpu* cpu, char* program, instruction_processor* pipe, unsigned short int index_core);  // Removido const
+void else_end(instruction_processor* pipe);
+void loop(cpu* cpu, instruction_processor* pipe, unsigned short int index_core);
+void loop_end(cpu* cpu, instruction_processor* pipe, unsigned short int index_core);
+
+// Funções auxiliares
+char* trim_copy(const char* str);  // Nova função que retorna uma cópia trimada
+void trim(char* str);              // Original mantida para compatibilidade
+char* instruction_fetch(cpu* cpu, char* program, unsigned short int index_core);
+type_of_instruction instruction_decode(char* instruction, unsigned short int num_instruction);
 
 #endif
