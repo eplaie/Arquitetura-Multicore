@@ -20,31 +20,30 @@ void* core_execution_thread(void* arg) {
     
     printf("Thread do Core %d iniciando\n", core_id);
     
-    show_thread_status(core_id, "Iniciada");
+    // show_thread_status(core_id, "Iniciada");
 
     while (current_core->running) {
         // Verificações adicionais
-        if (!current_core->is_available && 
+        if (!current_core->is_available &&
             current_core->current_process == NULL) {
             printf("AVISO: Core %d marcado como ocupado, mas sem processo\n", core_id);
         }
 
         lock_core(current_core);
-
         if (!current_core->is_available && current_core->current_process != NULL) {
             PCB* process = current_core->current_process;
             show_core_state(core_id, process->pid, "Executando");
-            
+
             // Verifica recursos antes de executar
             lock_resources(cpu);
             while (process->waiting_resource) {
                 pthread_cond_wait(&cpu->resource_condition, &cpu->resource_mutex);
             }
             unlock_resources(cpu);
-            
+
             // Executa ciclo do pipeline
             execute_pipeline_cycle(args->state, cpu, memory_ram, core_id, process->cycles_executed);
-            
+
             // Verifica quantum
             if (current_core->quantum_remaining <= 0) {
                 show_core_state(core_id, process->pid, "Quantum Expirado");
@@ -55,7 +54,6 @@ void* core_execution_thread(void* arg) {
         unlock_core(current_core);
         usleep(1000); // Pequeno delay para visualização
     }
-
     show_thread_status(core_id, "Finalizada");
     free(args);
     return NULL;

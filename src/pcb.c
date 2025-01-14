@@ -123,21 +123,21 @@ void schedule_next_process(cpu* cpu, int core_id) {
         printf("Tentando escalonar processo para o Core %d\n", core_id);
     
     lock_process_manager(pm);
-
     if (pm->ready_count == 0) {
         printf("AVISO: Nenhum processo pronto para escalonar\n");
         unlock_process_manager(pm);
         return;
     }
-    
-    lock_process_manager(pm);
-
+    // lock_process_manager(pm);
     for (int i = 0; i < pm->ready_count; i++) {
+
         PCB* process = pm->ready_queue[i];
         if (!process) continue;
 
         bool already_running = false;
+
         for (int j = 0; j < NUM_CORES; j++) {
+
             if (j != core_id && 
                 !cpu->core[j].is_available && 
                 cpu->core[j].current_process == process) {

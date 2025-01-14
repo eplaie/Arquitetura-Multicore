@@ -1,19 +1,19 @@
 #include "architecture.h"
 #include "os_display.h"
 
-void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, 
+void init_architecture(cpu* cpu, disc* memory_disc,
                       peripherals* peripherals, architecture_state* state) {
-    if (!cpu || !memory_ram || !memory_disc || !peripherals || !state) {
+    if (!cpu ||  !memory_disc || !peripherals || !state) {
         printf("Error: NULL pointer in init_architecture\n");
         exit(1);
     }
 
     // Inicializa memória RAM primeiro
-    memory_ram->vector = (char*)calloc(NUM_MEMORY, sizeof(char));
-    if (!memory_ram->vector) {
-        printf("Failed to allocate RAM memory\n");
-        exit(1);
-    }
+    // memory_ram->vector = malloc(NUM_MEMORY * sizeof(char));
+    // if (!memory_ram->vector) {
+    //     printf("Failed to allocate RAM memory\n");
+    //     exit(1);
+    // }
 
     // Inicializa CPU e threads
     init_cpu(cpu);
@@ -50,26 +50,26 @@ void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc,
     cpu->process_manager = state->process_manager;
 
     // Inicializa threads dos cores
-    for (int i = 0; i < NUM_CORES; i++) {
-        core_thread_args* args = malloc(sizeof(core_thread_args));
-        if (!args) {
-            printf("Failed to allocate thread arguments for core %d\n", i);
-            exit(1);
-        }
-
-        args->cpu = cpu;
-        args->memory_ram = memory_ram;
-        args->core_id = i;
-        args->state = state;
-        cpu->core[i].arch_state = state;
-
-        // Cria a thread do core
-        if (pthread_create(&cpu->core[i].thread, NULL, core_execution_thread, args) != 0) {
-            printf("Failed to create thread for core %d\n", i);
-            exit(1);
-        }
-        show_thread_status(i, "Created");
-    }
+    // for (int i = 0; i < NUM_CORES; i++) {
+    //     core_thread_args* args = malloc(sizeof(core_thread_args));
+    //     if (!args) {
+    //         printf("Failed to allocate thread arguments for core %d\n", i);
+    //         exit(1);
+    //     }
+    //
+    //     args->cpu = cpu;
+    //     args->memory_ram = memory_ram;
+    //     args->core_id = i;
+    //     args->state = state;
+    //     cpu->core[i].arch_state = state;
+    //
+    //     // Cria a thread do core
+    //     if (pthread_create(&cpu->core[i].thread, NULL, core_execution_thread, args) != 0) {
+    //         printf("Failed to create thread for core %d\n", i);
+    //         exit(1);
+    //     }
+    //     show_thread_status(i, "Created");
+    // }
 
     show_system_start();
 }

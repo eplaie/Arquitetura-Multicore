@@ -6,9 +6,11 @@
 #include "libs.h"
 
 typedef struct ram {
-    char *vector;
+    char* vector;
 } ram;
 
+
+ram* allocate_ram(size_t memory_size);
 void init_ram(ram* memory);
 void print_ram(ram* memory);
 void print_ram_segment(ram* memory, int start, int length);

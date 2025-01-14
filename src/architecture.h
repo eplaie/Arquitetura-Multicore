@@ -15,7 +15,7 @@
 #define MAX_CYCLES 100
 
 // Funções principais
-void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, 
+void init_architecture(cpu* cpu, disc* memory_disc,
                       peripherals* peripherals, architecture_state* state);
 
 void execute_pipeline_cycle(architecture_state* state, cpu* cpu, 

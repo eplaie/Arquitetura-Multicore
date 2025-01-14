@@ -48,8 +48,8 @@ char* read_program(const char* filename) {
 char* get_line_of_program(char* program_start, unsigned short int line_number) {
     if (!program_start) {
         printf("\n╔═══ Program Status ═══╗");
-        printf("\n║ Error: Null Pointer ║");
-        printf("\n╚════════════════════╝\n");
+        printf("\n║ Error: Null Pointer  ║");
+        printf("\n╚══════════════════════╝\n");
         return NULL;
     }
 

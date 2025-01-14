@@ -4,7 +4,8 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include "libs.h"
-#include "architecture.h"
+#include "ram.h"
+
 
 #define NUM_PROGRAMS 10
 
@@ -19,19 +20,23 @@ int main(void) {
 
     // Alocação dos componentes principais
     cpu* cpu = malloc(sizeof(cpu));
-    ram* memory_ram = malloc(sizeof(ram));
+    ram* memory_ram = allocate_ram(NUM_MEMORY);
     disc* memory_disc = malloc(sizeof(disc));
     peripherals* p = malloc(sizeof(peripherals));
     architecture_state* arch_state = malloc(sizeof(architecture_state));
-
+    if (!memory_ram->vector) {
+        printf("Falha na allocação_1");
+    }
     if (!cpu || !memory_ram || !memory_disc || !p || !arch_state) {
         printf("Erro: Falha na alocação de memória\n");
         return 1;
     }
 
     // Inicialização da arquitetura
-    init_architecture(cpu, memory_ram, memory_disc, p, arch_state);
-    
+    init_architecture(cpu, memory_disc, p, arch_state);
+    if (!memory_ram->vector) {
+        printf("Falha na allocação_2");
+    }
     // Inicializa threads dos cores
     for (int i = 0; i < NUM_CORES; i++) {
         core_thread_args* args = malloc(sizeof(core_thread_args));
@@ -66,7 +71,6 @@ for (int i = 0; i < num_programs; i++) {
     PCB* process = create_pcb();
     if (process != NULL) {
         char* program = read_program(filename);
-        
         // Debug: adicionar verificações
         if (program == NULL) {
             printf("ERRO CRÍTICO: Falha ao ler programa %s\n", filename);
@@ -85,8 +89,9 @@ for (int i = 0; i < num_programs; i++) {
         }
 
         printf("Programa %s carregado com sucesso\n", filename);
-        
+
         load_program_on_ram(memory_ram, program);
+
         process->state = READY;
         
         if (cpu->process_manager->ready_count < MAX_PROCESSES) {
