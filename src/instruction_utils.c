@@ -55,6 +55,7 @@ unsigned short int verify_address(ram* memory_ram, char* address, unsigned short
 }
 
 void load(cpu* cpu, const char* instruction, unsigned short int index_core) {
+    printf("\n[LOAD] Início da instrução: %s", instruction);
     char *instruction_copy, *token, *register_name;
     unsigned short int value, register_index;
 
@@ -88,6 +89,8 @@ void load(cpu* cpu, const char* instruction, unsigned short int index_core) {
 }
 
 void store(cpu* cpu, ram* memory_ram, const char* instruction, unsigned short int index_core) {
+    printf("\n[LOAD] Início da instrução: %s", instruction);
+
     char *instruction_copy, *token, *register_name, *memory_address;
     char buffer[10]; 
     unsigned short int register_index, register_value;
@@ -675,5 +678,59 @@ type_of_instruction instruction_decode(char* instruction, unsigned short int /*n
     if (strncmp(instruction, "ELS_END", 7) == 0) return ELS_END;
 
     return INVALID;
+}
+
+// Em instruction_utils.c
+void execute_instruction(cpu* cpu, ram* memory_ram, const char* instruction,
+                       type_of_instruction type, int core_id,
+                       instruction_processor* instr_processor, const char* program) {
+    if (!cpu || !memory_ram || !instruction || !instr_processor) {
+        printf("\nERRO: Parâmetros inválidos em execute_instruction");
+        return;
+    }
+
+    printf("\n[Exec] Executando instrução %s", instruction);
+    
+    switch (type) {
+        case LOAD:
+            load(cpu, instruction, core_id);
+            break;
+        case STORE:
+            store(cpu, memory_ram, instruction, core_id);
+            break;
+        case ADD:
+            add(cpu, instruction, core_id);
+            break;
+        case SUB:
+            sub(cpu, instruction, core_id);
+            break;
+        case MUL:
+            mul(cpu, instruction, core_id);
+            break;
+        case DIV:
+            div_c(cpu, instruction, core_id);
+            break;
+        case LOOP:
+            loop(cpu, instr_processor, core_id);
+            break;
+        case IF:
+            if_i(cpu, (char*)program, instr_processor, core_id);
+            break;
+        case ELSE:
+            else_i(cpu, (char*)program, instr_processor, core_id);
+            break;
+        case L_END:
+            loop_end(cpu, instr_processor, core_id);
+            break;
+        case I_END:
+            if_end(instr_processor);
+            break;
+        case ELS_END:
+            else_end(instr_processor);
+            break;
+        default:
+            printf("\nERRO: Instrução inválida");
+            break;
+    }
 }
 

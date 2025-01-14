@@ -3,7 +3,7 @@
 
 #include "libs.h"
 #include "common_types.h"
-#include "ram.h"
+#include "ram.h"  // Agora que ram.h tem a estrutura definida primeiro
 #include "pcb.h"
 #include "architecture_state.h"
 
@@ -23,14 +23,15 @@ typedef struct core {
     architecture_state* arch_state;  
 } core;
 
-// CPU com mutex global de recursos
+// CPU com mutex global de recursos e RAM
 typedef struct cpu {
+    ram* memory_ram;        // Agora a estrutura ram já está definida
     core *core;
     ProcessManager* process_manager;
     pthread_mutex_t scheduler_mutex;
-    pthread_mutex_t memory_mutex;     // Proteção para acesso à memória
-    pthread_mutex_t resource_mutex;   // Proteção para recursos compartilhados
-    pthread_cond_t resource_condition; // Condição para espera de recursos
+    pthread_mutex_t memory_mutex;     
+    pthread_mutex_t resource_mutex;   
+    pthread_cond_t resource_condition; 
 } cpu;
 
 // Argumentos para thread de core
@@ -41,8 +42,8 @@ typedef struct core_thread_args {
     architecture_state* state;
 } core_thread_args;
 
-// Funções de inicialização e cleanup
-void init_cpu(cpu* cpu);
+// Funções de inicialização e cleanup - Atualizada para incluir RAM
+void init_cpu(cpu* cpu, ram* memory_ram);
 void cleanup_cpu_threads(cpu* cpu);
 
 // Thread principal dos cores

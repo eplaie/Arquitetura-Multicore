@@ -2,7 +2,7 @@
 #define COMMON_TYPES_H
 
 // Definições globais
-#define MAX_PROCESSES 10
+#define MAX_PROCESSES 5
 #define NUM_CORES 4
 #define NUM_REGISTERS 32
 #define NUM_MEMORY 1024

@@ -32,5 +32,8 @@ char* trim_copy(const char* str);  // Nova função que retorna uma cópia trima
 void trim(char* str);              // Original mantida para compatibilidade
 char* instruction_fetch(cpu* cpu, char* program, unsigned short int index_core);
 type_of_instruction instruction_decode(char* instruction, unsigned short int num_instruction);
+void execute_instruction(cpu* cpu, ram* memory_ram, const char* instruction,
+                       type_of_instruction type, int core_id,
+                       instruction_processor* instr_processor, const char* program);
 
 #endif

@@ -1,83 +1,104 @@
 #include "architecture.h"
 #include "os_display.h"
+#include "cpu.h"
+#include "ram.h"
+#include "disc.h"
+#include "peripherals.h"
+#include "pcb.h"
+#include "pipeline.h"
 
-void init_architecture(cpu* cpu, disc* memory_disc,
+void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, 
                       peripherals* peripherals, architecture_state* state) {
-    if (!cpu ||  !memory_disc || !peripherals || !state) {
-        printf("Error: NULL pointer in init_architecture\n");
+    printf("\n[Init] Iniciando arquitetura");
+    printf("\n[Init] Verificação inicial:");
+    printf("\n - CPU: %p", (void*)cpu);
+    printf("\n - RAM: %p", (void*)memory_ram);
+    printf("\n - RAM vector: %p", (void*)memory_ram->vector);
+
+    if (!cpu || !memory_ram || !memory_disc || !peripherals || !state) {
+        printf("\n[Init] ERRO: Ponteiro NULL detectado");
         exit(1);
     }
 
-    // Inicializa memória RAM primeiro
-    // memory_ram->vector = malloc(NUM_MEMORY * sizeof(char));
-    // if (!memory_ram->vector) {
-    //     printf("Failed to allocate RAM memory\n");
-    //     exit(1);
-    // }
-
-    // Inicializa CPU e threads
-    init_cpu(cpu);
-    show_thread_status(-1, "CPU initialized");
+    // Inicializa CPU
+    init_cpu(cpu, memory_ram);
+    
+    printf("\n[Init] Verificação após init_cpu:");
+    printf("\n - CPU memory_ram: %p", (void*)cpu->memory_ram);
+    printf("\n - CPU memory_ram vector: %p", (void*)cpu->memory_ram->vector);
 
     // Inicializa disco e periféricos
     init_disc(memory_disc);
-    init_peripherals(peripherals);
+    printf("\n[Init] Disco inicializado");
 
-    // Inicializa estado da arquitetura
+    init_peripherals(peripherals);
+    printf("\n[Init] Periféricos inicializados");
+
+    // Inicializa pipeline
     state->pipeline = malloc(sizeof(pipeline));
     if (!state->pipeline) {
-        printf("Failed to allocate pipeline\n");
+        printf("\n[Init] ERRO: Falha ao alocar pipeline");
         exit(1);
     }
     init_pipeline(state->pipeline);
+    printf("\n[Init] Pipeline inicializado");
 
     // Inicializa gerenciador de processos
     state->process_manager = init_process_manager(DEFAULT_QUANTUM);
+    printf("\n[Init] Process Manager inicializado");
+    
+    // Configura o gerenciador de processos na CPU
+    cpu->process_manager = state->process_manager;
+
+    // Cria as threads dos cores
+    printf("\n[Init] Criando threads dos cores");
+    for (int i = 0; i < NUM_CORES; i++) {
+        core_thread_args* args = malloc(sizeof(core_thread_args));
+        if (!args) {
+            printf("\n[Init] ERRO: Falha na alocação dos argumentos da thread %d", i);
+            exit(1);
+        }
+
+        args->cpu = cpu;
+        args->memory_ram = cpu->memory_ram;
+        args->core_id = i;
+        args->state = state;
+        cpu->core[i].arch_state = state;
+
+        printf("\n[Init] Thread %d - argumentos:", i);
+        printf("\n - CPU: %p", (void*)args->cpu);
+        printf("\n - RAM: %p", (void*)args->memory_ram);
+        printf("\n - RAM vector: %p", (void*)args->memory_ram->vector);
+
+        if (pthread_create(&cpu->core[i].thread, NULL, core_execution_thread, args) != 0) {
+            printf("\n[Init] ERRO: Falha na criação da thread do core %d", i);
+            exit(1);
+        }
+        
+        printf("\n[Init] Thread do core %d criada com sucesso", i);
+        show_thread_status(i, "Iniciada");
+    }
+
+    // Inicializa métricas e estado global
     state->program_running = true;
     state->cycle_count = 0;
-    
-    // Inicializa métricas
     state->total_instructions = 0;
     state->completed_processes = 0;
     state->blocked_processes = 0;
     state->context_switches = 0;
     state->avg_turnaround = 0;
 
-    // Inicializa mutex global
     pthread_mutex_init(&state->global_mutex, NULL);
 
-    // Configura CPU para trabalhar com o process manager
-    cpu->process_manager = state->process_manager;
-
-    // Inicializa threads dos cores
-    // for (int i = 0; i < NUM_CORES; i++) {
-    //     core_thread_args* args = malloc(sizeof(core_thread_args));
-    //     if (!args) {
-    //         printf("Failed to allocate thread arguments for core %d\n", i);
-    //         exit(1);
-    //     }
-    //
-    //     args->cpu = cpu;
-    //     args->memory_ram = memory_ram;
-    //     args->core_id = i;
-    //     args->state = state;
-    //     cpu->core[i].arch_state = state;
-    //
-    //     // Cria a thread do core
-    //     if (pthread_create(&cpu->core[i].thread, NULL, core_execution_thread, args) != 0) {
-    //         printf("Failed to create thread for core %d\n", i);
-    //         exit(1);
-    //     }
-    //     show_thread_status(i, "Created");
-    // }
-
-    show_system_start();
+    printf("\n[Init] Arquitetura inicializada com sucesso");
+    printf("\n - Cores ativos: %d", NUM_CORES);
+    printf("\n - Quantum: %d", DEFAULT_QUANTUM);
+    printf("\n - RAM final: %p", (void*)cpu->memory_ram->vector);
 }
 
 void update_system_metrics(architecture_state* state) {
     pthread_mutex_lock(&state->global_mutex);
     
-    // Calcula tempo médio de turnaround
     float total_turnaround = 0;
     int completed = 0;
     
@@ -100,7 +121,6 @@ void check_system_state(architecture_state* state, cpu* cpu) {
     
     int running = 0, ready = 0, blocked = 0;
     
-    // Conta processos em cada estado
     ready = cpu->process_manager->ready_count;
     blocked = cpu->process_manager->blocked_count;
     
@@ -112,39 +132,36 @@ void check_system_state(architecture_state* state, cpu* cpu) {
         }
     }
     
-    // Atualiza estado do sistema
     state->blocked_processes = blocked;
     state->program_running = (running + ready + blocked) > 0;
     
     pthread_mutex_unlock(&state->global_mutex);
-    
-    // Mostra estado atual
     show_scheduler_state(ready, blocked);
 }
 
 void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, 
                       peripherals* peripherals, architecture_state* state) {
-    // Cleanup das threads primeiro
     cleanup_cpu_threads(cpu);
     
-    // Libera ProcessManager
+    if (cpu && cpu->memory_ram) {
+        free(cpu->memory_ram);
+    }
+
+    if (memory_ram) {
+        free(memory_ram->vector);
+        free(memory_ram);
+    }
+
     if (state->process_manager) {
-        // Limpa filas
         free(state->process_manager->ready_queue);
         free(state->process_manager->blocked_queue);
         free(state->process_manager);
     }
 
-    // Libera Pipeline
     if (state->pipeline) {
         free(state->pipeline);
     }
 
-    // Libera memória e outros componentes
-    if (memory_ram) {
-        free(memory_ram->vector);
-        free(memory_ram);
-    }
     if (memory_disc) {
         free(memory_disc);
     }
@@ -152,13 +169,10 @@ void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc,
         free(peripherals);
     }
 
-    // Libera mutex global
     pthread_mutex_destroy(&state->global_mutex);
 
-    // Libera estado
     free(state);
 
-    // Libera PCBs
     for (int i = 0; i < total_processes; i++) {
         if (all_processes[i]) {
             free_pcb(all_processes[i]);

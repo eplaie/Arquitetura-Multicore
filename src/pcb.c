@@ -90,9 +90,11 @@ const char* state_to_string(process_state state) {
 }
 
 ProcessManager* init_process_manager(int quantum_size) {
+    printf("\n[PM Init] Iniciando gerenciador de processos");
+    
     ProcessManager* pm = malloc(sizeof(ProcessManager));
     if (!pm) {
-        printf("Falha ao alocar Process Manager\n");
+        printf("\nFalha ao alocar Process Manager\n");
         exit(1);
     }
 
@@ -101,7 +103,7 @@ ProcessManager* init_process_manager(int quantum_size) {
     pm->blocked_queue = malloc(sizeof(PCB*) * MAX_PROCESSES);
     
     if (!pm->ready_queue || !pm->blocked_queue) {
-        printf("Falha ao alocar filas\n");
+        printf("\nFalha ao alocar filas\n");
         exit(1);
     }
 
@@ -114,30 +116,39 @@ ProcessManager* init_process_manager(int quantum_size) {
     pthread_mutex_init(&pm->resource_mutex, NULL);
     pthread_cond_init(&pm->resource_condition, NULL);
 
+    printf("\n[PM Init] Gerenciador de processos inicializado");
     return pm;
 }
 
 void schedule_next_process(cpu* cpu, int core_id) {
-    ProcessManager* pm = cpu->process_manager;
-
-        printf("Tentando escalonar processo para o Core %d\n", core_id);
+    printf("\n[Scheduler] Tentando escalonar processo para Core %d", core_id);
     
+    if (!cpu || core_id < 0 || core_id >= NUM_CORES) {
+        printf("\n[Scheduler] ERRO: Parâmetros inválidos");
+        return;
+    }
+
+    ProcessManager* pm = cpu->process_manager;
     lock_process_manager(pm);
+
     if (pm->ready_count == 0) {
-        printf("AVISO: Nenhum processo pronto para escalonar\n");
+        printf("\n[Scheduler] Nenhum processo pronto para escalonar");
         unlock_process_manager(pm);
         return;
     }
-    // lock_process_manager(pm);
-    for (int i = 0; i < pm->ready_count; i++) {
 
+    printf("\n[Scheduler] Processos prontos: %d", pm->ready_count);
+
+    // Busca por um processo que não esteja rodando em outro core
+    for (int i = 0; i < pm->ready_count; i++) {
         PCB* process = pm->ready_queue[i];
-        if (!process) continue;
+        if (!process) {
+            printf("\n[Scheduler] ERRO: Processo NULL na fila");
+            continue;
+        }
 
         bool already_running = false;
-
         for (int j = 0; j < NUM_CORES; j++) {
-
             if (j != core_id && 
                 !cpu->core[j].is_available && 
                 cpu->core[j].current_process == process) {
@@ -160,6 +171,11 @@ void schedule_next_process(cpu* cpu, int core_id) {
             cpu->core[core_id].quantum_remaining = pm->quantum_size;
             cpu->core[core_id].is_available = false;
 
+            printf("\n[Scheduler] Processo %d escalado para Core %d", process->pid, core_id);
+            printf("\n - Quantum: %d", cpu->core[core_id].quantum_remaining);
+            printf("\n - Base: %d", process->base_address);
+            printf("\n - PC: %d", process->PC);
+            
             show_process_state(process->pid, "READY", "RUNNING");
             break;
         }

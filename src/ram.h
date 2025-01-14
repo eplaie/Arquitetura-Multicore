@@ -5,16 +5,17 @@
 
 #include "libs.h"
 
+// Definir a estrutura RAM antes de incluir cpu.h
 typedef struct ram {
-    char* vector;
+    char *vector;
 } ram;
 
+// Forward declaration da estrutura cpu
+struct cpu;
 
+// Funções da RAM
 ram* allocate_ram(size_t memory_size);
-void init_ram(ram* memory);
-void print_ram(ram* memory);
-void print_ram_segment(ram* memory, int start, int length);
-void load_program_on_ram(ram* memory_ram, char* program_content);
-// Adicione esta declaração no ram.h
+void load_program_on_ram(struct cpu* cpu, char* program_content, unsigned int base_address);
 void write_ram(ram* memory_ram, unsigned short int address, const char* data);
-#endif 
+
+#endif

@@ -37,10 +37,7 @@ void execute_pipeline_cycle(struct architecture_state* state, struct cpu* cpu,
                           struct ram* memory_ram, int core_id, int cycle_count);
 void cleanup_pipeline(pipeline* p);
 
-// Funções de estágio do pipeline
-void execute_instruction(struct cpu* cpu, struct ram* memory_ram, const char* instruction,
-                       type_of_instruction type, int core_id,
-                       instruction_processor* instr_processor, const char* program);
+// Funções de estágio do pipelin
 void handle_memory_stage(type_of_instruction type);
 void handle_writeback_stage(type_of_instruction type);
 void update_process_state(struct architecture_state* state, struct PCB* current_process,
