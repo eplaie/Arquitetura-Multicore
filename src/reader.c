@@ -2,13 +2,13 @@
 
 char* read_program(const char* filename) {
     if (!filename) {
-        printf("Error: NULL filename\n");
+        printf("[Sistema] Erro: Nome de arquivo inválido\n");
         return NULL;
     }
 
     FILE* arq = fopen(filename, "r");
     if (arq == NULL) {
-        printf("Error opening file: %s\n", filename);
+        printf("[Sistema] Erro ao abrir arquivo: %s\n", filename);
         return NULL;
     }
 
@@ -18,15 +18,15 @@ char* read_program(const char* filename) {
     fseek(arq, 0, SEEK_SET);
 
     if (fsize <= 0) {
-        printf("Error: Empty or invalid file\n");
+        printf("[Sistema] Erro: Arquivo vazio ou inválido\n");
         fclose(arq);
         return NULL;
     }
 
-    // Aloca memória para o conteúdo + caractere nulo
+    // Aloca memória para o conteúdo
     char* program = (char*)malloc(fsize + 1);
     if (program == NULL) {
-        printf("Error: Memory allocation failed for program\n");
+        printf("[Sistema] Erro: Falha na alocação de memória\n");
         fclose(arq);
         return NULL;
     }
@@ -34,7 +34,7 @@ char* read_program(const char* filename) {
     // Lê o arquivo
     size_t read_size = fread(program, 1, fsize, arq);
     if (read_size != (size_t)fsize) {
-        printf("Error: Failed to read entire file\n");
+        printf("[Sistema] Erro: Falha na leitura do arquivo\n");
         free(program);
         fclose(arq);
         return NULL;
@@ -46,19 +46,10 @@ char* read_program(const char* filename) {
 }
 
 char* get_line_of_program(char* program_start, unsigned short int line_number) {
-        printf("\n[Program] Lendo linha %hu", line_number);
-    printf("\n[Program] Endereço: %p", (void*)program_start);
     if (!program_start) {
-        printf("\n╔═══ Program Status ═══╗");
-        printf("\n║ Error: Null Pointer  ║");
-        printf("\n╚══════════════════════╝\n");
+        printf("[Programa] Erro: Ponteiro inválido\n");
         return NULL;
     }
-
-    printf("\n╔═══ Program Read Operation ═══╗");
-    printf("\n├── Line: %hu", line_number);
-    printf("\n├── Address: %p", (void*)program_start);
-    printf("\n└── Content Preview: %.30s\n", program_start);
 
     // Encontra a linha desejada
     char* current = program_start;
@@ -66,7 +57,7 @@ char* get_line_of_program(char* program_start, unsigned short int line_number) {
 
     while (current_line < line_number) {
         if (*current == '\0') {
-            printf("\n[Program Status] End reached at line %hu\n", current_line);
+            printf("[Programa] Fim do programa na linha %hu\n", current_line);
             return NULL;
         }
         if (*current == '\n') {
@@ -85,7 +76,7 @@ char* get_line_of_program(char* program_start, unsigned short int line_number) {
     size_t len = line_end - current;
     char* result = malloc(len + 1);
     if (!result) {
-        printf("\n[Memory Error] Failed to allocate line buffer\n");
+        printf("[Programa] Erro: Falha na alocação de memória\n");
         return NULL;
     }
 
@@ -97,7 +88,6 @@ char* get_line_of_program(char* program_start, unsigned short int line_number) {
         result[--len] = '\0';
     }
 
-    printf("\n[Line Found] '%s'\n", result);
     return result;
 }
 

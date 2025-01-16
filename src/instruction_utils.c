@@ -55,7 +55,6 @@ unsigned short int verify_address(ram* memory_ram, char* address, unsigned short
 }
 
 void load(cpu* cpu, const char* instruction, unsigned short int index_core) {
-    printf("\n[LOAD] Início da instrução: %s", instruction);
     char *instruction_copy, *token, *register_name;
     unsigned short int value, register_index;
 
@@ -89,7 +88,6 @@ void load(cpu* cpu, const char* instruction, unsigned short int index_core) {
 }
 
 void store(cpu* cpu, ram* memory_ram, const char* instruction, unsigned short int index_core) {
-    printf("\n[LOAD] Início da instrução: %s", instruction);
 
     char *instruction_copy, *token, *register_name, *memory_address;
     char buffer[10]; 
@@ -689,8 +687,6 @@ void execute_instruction(cpu* cpu, ram* memory_ram, const char* instruction,
         return;
     }
 
-    printf("\n[Exec] Executando instrução %s", instruction);
-    
     switch (type) {
         case LOAD:
             load(cpu, instruction, core_id);

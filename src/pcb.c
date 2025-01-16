@@ -7,13 +7,13 @@ int total_processes = 0;
 
 PCB* create_pcb(void) {
     if (total_processes >= MAX_PROCESSES) {
-        printf("[PCB] ERRO: Número máximo de processos atingido\n");
+        printf("[Sistema] Erro: Limite de processos atingido (%d)\n", MAX_PROCESSES);
         return NULL;
     }
 
     PCB* pcb = malloc(sizeof(PCB));
     if (!pcb) {
-        printf("[PCB] Erro: Falha na alocação do PCB\n");
+        printf("[Sistema] Erro: Falha na alocação de processo\n");
         return NULL;
     }
 
@@ -23,13 +23,13 @@ PCB* create_pcb(void) {
     pcb->PC = 0;
     pcb->cycles_executed = 0;
     pcb->quantum_remaining = DEFAULT_QUANTUM;
-    pcb->base_address = 0;  // Deve ser calculado baseado no total de processos
-    pcb->memory_limit = NUM_MEMORY;  // Ajustar conforme necessário
+    pcb->base_address = 0;
+    pcb->memory_limit = NUM_MEMORY;
     pcb->was_completed = false;
 
     pcb->registers = calloc(NUM_REGISTERS, sizeof(unsigned short int));
     if (!pcb->registers) {
-        printf("[PCB] Erro: Falha na alocação dos registradores\n");
+        printf("[Sistema] Erro: Falha na alocação dos registradores\n");
         free(pcb);
         return NULL;
     }
@@ -44,7 +44,7 @@ PCB* create_pcb(void) {
     pcb->turnaround_time = 0;
 
     all_processes[total_processes++] = pcb;
-    printf("[PCB] Processo %d criado com sucesso\n", pcb->pid);
+    printf("[Sistema] Processo %d criado\n", pcb->pid);
     show_process_state(pcb->pid, "CREATED", "NEW");
 
     return pcb;
@@ -68,7 +68,7 @@ void restore_context(PCB* pcb, core* current_core) {
 
 void free_pcb(PCB* pcb) {
     if (!pcb) return;
-    
+
     if (pcb->registers) {
         free(pcb->registers);
     }
@@ -90,20 +90,17 @@ const char* state_to_string(process_state state) {
 }
 
 ProcessManager* init_process_manager(int quantum_size) {
-    printf("\n[PM Init] Iniciando gerenciador de processos");
-    
     ProcessManager* pm = malloc(sizeof(ProcessManager));
     if (!pm) {
-        printf("\nFalha ao alocar Process Manager\n");
+        printf("[Sistema] Erro: Falha na inicialização do gerenciador\n");
         exit(1);
     }
 
-    // Inicializa filas
     pm->ready_queue = malloc(sizeof(PCB*) * MAX_PROCESSES);
     pm->blocked_queue = malloc(sizeof(PCB*) * MAX_PROCESSES);
-    
+
     if (!pm->ready_queue || !pm->blocked_queue) {
-        printf("\nFalha ao alocar filas\n");
+        printf("[Sistema] Erro: Falha na alocação das filas\n");
         exit(1);
     }
 
@@ -111,20 +108,17 @@ ProcessManager* init_process_manager(int quantum_size) {
     pm->blocked_count = 0;
     pm->quantum_size = quantum_size;
 
-    // Inicializa mutexes
     pthread_mutex_init(&pm->queue_mutex, NULL);
     pthread_mutex_init(&pm->resource_mutex, NULL);
     pthread_cond_init(&pm->resource_condition, NULL);
 
-    printf("\n[PM Init] Gerenciador de processos inicializado");
+    printf("[Sistema] Gerenciador de processos iniciado\n");
     return pm;
 }
 
 void schedule_next_process(cpu* cpu, int core_id) {
-    printf("\n[Scheduler] Tentando escalonar processo para Core %d", core_id);
-    
     if (!cpu || core_id < 0 || core_id >= NUM_CORES) {
-        printf("\n[Scheduler] ERRO: Parâmetros inválidos");
+        printf("[Escalonador] Erro: Parâmetros inválidos\n");
         return;
     }
 
@@ -132,25 +126,18 @@ void schedule_next_process(cpu* cpu, int core_id) {
     lock_process_manager(pm);
 
     if (pm->ready_count == 0) {
-        printf("\n[Scheduler] Nenhum processo pronto para escalonar");
         unlock_process_manager(pm);
         return;
     }
 
-    printf("\n[Scheduler] Processos prontos: %d", pm->ready_count);
-
-    // Busca por um processo que não esteja rodando em outro core
     for (int i = 0; i < pm->ready_count; i++) {
         PCB* process = pm->ready_queue[i];
-        if (!process) {
-            printf("\n[Scheduler] ERRO: Processo NULL na fila");
-            continue;
-        }
+        if (!process) continue;
 
         bool already_running = false;
         for (int j = 0; j < NUM_CORES; j++) {
-            if (j != core_id && 
-                !cpu->core[j].is_available && 
+            if (j != core_id &&
+                !cpu->core[j].is_available &&
                 cpu->core[j].current_process == process) {
                 already_running = true;
                 break;
@@ -158,23 +145,19 @@ void schedule_next_process(cpu* cpu, int core_id) {
         }
 
         if (!already_running) {
-            // Remove da fila de prontos
             for (int j = i; j < pm->ready_count - 1; j++) {
                 pm->ready_queue[j] = pm->ready_queue[j + 1];
             }
             pm->ready_count--;
 
-            // Atribui ao core
             process->state = RUNNING;
             process->core_id = core_id;
             cpu->core[core_id].current_process = process;
             cpu->core[core_id].quantum_remaining = pm->quantum_size;
             cpu->core[core_id].is_available = false;
 
-            printf("\n[Scheduler] Processo %d escalado para Core %d", process->pid, core_id);
-            printf("\n - Quantum: %d", cpu->core[core_id].quantum_remaining);
-            printf("\n - Base: %d", process->base_address);
-            printf("\n - PC: %d", process->PC);
+            printf("[Escalonador] P%d -> Core %d (Quantum: %d)\n",
+                   process->pid, core_id, pm->quantum_size);
             
             show_process_state(process->pid, "READY", "RUNNING");
             break;
