@@ -8,6 +8,9 @@
 // Definir a estrutura RAM antes de incluir cpu.h
 typedef struct ram {
     char *vector;
+    size_t size;
+    pthread_mutex_t mutex;
+    bool initialized;
 } ram;
 
 // Forward declaration da estrutura cpu
@@ -17,5 +20,6 @@ struct cpu;
 ram* allocate_ram(size_t memory_size);
 void load_program_on_ram(struct cpu* cpu, char* program_content, unsigned int base_address);
 void write_ram(ram* memory_ram, unsigned short int address, const char* data);
+bool verify_ram(ram* memory_ram, const char* context);
 
 #endif

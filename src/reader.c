@@ -51,28 +51,36 @@ char* get_line_of_program(char* program_start, unsigned short int line_number) {
         return NULL;
     }
 
+    // printf("[Debug] Buscando linha %hu\n", line_number);
+
     // Encontra a linha desejada
     char* current = program_start;
     unsigned short int current_line = 0;
 
+    // Avança até a linha desejada
     while (current_line < line_number) {
-        if (*current == '\0') {
+        while (*current && *current != '\n') {
+            current++;
+        }
+        if (*current == '\n') {
+            current++;
+            current_line++;
+        } else {
             printf("[Programa] Fim do programa na linha %hu\n", current_line);
             return NULL;
         }
-        if (*current == '\n') {
-            current_line++;
-        }
-        current++;
     }
+
+    printf("[Position] Posição atual: %.20s...\n", current);
 
     // Encontra fim da linha atual
     char* line_end = strchr(current, '\n');
     if (!line_end) {
+        // printf("[Debug] Não encontrou \\n, usando strlen\n");
         line_end = current + strlen(current);
     }
 
-    // Aloca e copia a linha
+    // Calcula tamanho e aloca
     size_t len = line_end - current;
     char* result = malloc(len + 1);
     if (!result) {
@@ -80,6 +88,7 @@ char* get_line_of_program(char* program_start, unsigned short int line_number) {
         return NULL;
     }
 
+    // Copia a linha
     strncpy(result, current, len);
     result[len] = '\0';
 
@@ -88,6 +97,7 @@ char* get_line_of_program(char* program_start, unsigned short int line_number) {
         result[--len] = '\0';
     }
 
+    // printf("[Debug] Linha encontrada: '%s'\n", result);
     return result;
 }
 

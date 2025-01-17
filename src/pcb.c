@@ -26,6 +26,7 @@ PCB* create_pcb(void) {
     pcb->base_address = 0;
     pcb->memory_limit = NUM_MEMORY;
     pcb->was_completed = false;
+    pcb->start_time = 0;  // Inicializa com 0, será definido quando o processo começar a executar
 
     pcb->registers = calloc(NUM_REGISTERS, sizeof(unsigned short int));
     if (!pcb->registers) {
@@ -42,6 +43,7 @@ PCB* create_pcb(void) {
     pcb->total_instructions = 0;
     pcb->waiting_time = 0;
     pcb->turnaround_time = 0;
+    pcb->completion_time = 0;
 
     all_processes[total_processes++] = pcb;
     printf("[Sistema] Processo %d criado\n", pcb->pid);
@@ -53,9 +55,14 @@ PCB* create_pcb(void) {
 void save_context(PCB* pcb, core* current_core) {
     if (!pcb || !current_core) return;
 
+    // Salva PC e outros estados
     pcb->PC = current_core->PC;
     memcpy(pcb->registers, current_core->registers, NUM_REGISTERS * sizeof(unsigned short int));
     pcb->quantum_remaining = current_core->quantum_remaining;
+    
+    printf("\n[Context] Salvando contexto do processo %d", pcb->pid);
+    printf("\n - PC: %d", pcb->PC);
+    printf("\n - Quantum: %d", pcb->quantum_remaining);
 }
 
 void restore_context(PCB* pcb, core* current_core) {
@@ -64,6 +71,10 @@ void restore_context(PCB* pcb, core* current_core) {
     current_core->PC = pcb->PC;
     memcpy(current_core->registers, pcb->registers, NUM_REGISTERS * sizeof(unsigned short int));
     current_core->quantum_remaining = pcb->quantum_remaining;
+    
+    // printf("\n[Context] Restaurando contexto do processo %d", pcb->pid);
+    // printf("\n - PC: %d", current_core->PC);
+    printf("\n - Quantum: %d", current_core->quantum_remaining);
 }
 
 void free_pcb(PCB* pcb) {
@@ -92,75 +103,68 @@ const char* state_to_string(process_state state) {
 ProcessManager* init_process_manager(int quantum_size) {
     ProcessManager* pm = malloc(sizeof(ProcessManager));
     if (!pm) {
-        printf("[Sistema] Erro: Falha na inicialização do gerenciador\n");
-        exit(1);
+        printf("[Sistema] Erro: Falha na alocação do gerenciador\n");
+        return NULL;
     }
+
+    // printf("\n[Debug] Inicializando Process Manager");
+    // printf("\n - Endereço: %p", (void*)pm);
 
     pm->ready_queue = malloc(sizeof(PCB*) * MAX_PROCESSES);
     pm->blocked_queue = malloc(sizeof(PCB*) * MAX_PROCESSES);
 
     if (!pm->ready_queue || !pm->blocked_queue) {
         printf("[Sistema] Erro: Falha na alocação das filas\n");
-        exit(1);
+        free(pm);
+        return NULL;
     }
 
     pm->ready_count = 0;
     pm->blocked_count = 0;
     pm->quantum_size = quantum_size;
+    pm->current_time = 0;
+    pm->policy = NULL;  // Será definido depois
 
     pthread_mutex_init(&pm->queue_mutex, NULL);
     pthread_mutex_init(&pm->resource_mutex, NULL);
     pthread_cond_init(&pm->resource_condition, NULL);
 
-    printf("[Sistema] Gerenciador de processos iniciado\n");
+    printf("[Sistema] Gerenciador de processos iniciado com sucesso\n");
     return pm;
 }
 
 void schedule_next_process(cpu* cpu, int core_id) {
-    if (!cpu || core_id < 0 || core_id >= NUM_CORES) {
-        printf("[Escalonador] Erro: Parâmetros inválidos\n");
-        return;
-    }
+    if (!cpu || !cpu->process_manager) return;
 
     ProcessManager* pm = cpu->process_manager;
     lock_process_manager(pm);
 
-    if (pm->ready_count == 0) {
-        unlock_process_manager(pm);
-        return;
-    }
+    // printf("\n[Debug] Tentando escalonar processo para core %d", core_id);
+    printf("\n - Processos prontos: %d", pm->ready_count);
 
-    for (int i = 0; i < pm->ready_count; i++) {
-        PCB* process = pm->ready_queue[i];
-        if (!process) continue;
-
-        bool already_running = false;
-        for (int j = 0; j < NUM_CORES; j++) {
-            if (j != core_id &&
-                !cpu->core[j].is_available &&
-                cpu->core[j].current_process == process) {
-                already_running = true;
-                break;
+    if (pm->ready_count > 0) {
+        PCB* next_process = pm->policy->select_next(pm);
+        if (next_process) {
+            if (next_process->start_time == 0) {
+                next_process->start_time = pm->current_time;
             }
-        }
-
-        if (!already_running) {
-            for (int j = i; j < pm->ready_count - 1; j++) {
-                pm->ready_queue[j] = pm->ready_queue[j + 1];
-            }
-            pm->ready_count--;
-
-            process->state = RUNNING;
-            process->core_id = core_id;
-            cpu->core[core_id].current_process = process;
+            
+            // Resetar quantum e estado do core
             cpu->core[core_id].quantum_remaining = pm->quantum_size;
             cpu->core[core_id].is_available = false;
-
-            printf("[Escalonador] P%d -> Core %d (Quantum: %d)\n",
-                   process->pid, core_id, pm->quantum_size);
+            cpu->core[core_id].current_process = next_process;
+            cpu->core[core_id].PC = next_process->PC;
             
-            show_process_state(process->pid, "READY", "RUNNING");
-            break;
+            next_process->state = RUNNING;
+            next_process->core_id = core_id;
+            
+            restore_context(next_process, &cpu->core[core_id]);
+            show_process_state(next_process->pid, "READY", "RUNNING");
+            
+            printf("\n[Debug] Processo %d escalonado para core %d", 
+                   next_process->pid, core_id);
+            printf("\n - PC: %d", next_process->PC);
+            printf("\n - Quantum: %d", cpu->core[core_id].quantum_remaining);
         }
     }
 

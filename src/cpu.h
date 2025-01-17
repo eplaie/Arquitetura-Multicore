@@ -3,7 +3,7 @@
 
 #include "libs.h"
 #include "common_types.h"
-#include "ram.h"  // Agora que ram.h tem a estrutura definida primeiro
+#include "ram.h"
 #include "pcb.h"
 #include "architecture_state.h"
 
@@ -12,9 +12,9 @@
 
 // Estrutura de core com suporte a threads
 typedef struct core {
-    unsigned short int *registers;
+    unsigned short int* registers;  // Ponteiro para array de registradores
     unsigned short int PC;
-    PCB* current_process;
+    PCB* current_process;  // Ponteiro para processo atual
     bool is_available;
     int quantum_remaining;
     pthread_t thread;
@@ -25,9 +25,9 @@ typedef struct core {
 
 // CPU com mutex global de recursos e RAM
 typedef struct cpu {
-    ram* memory_ram;        // Agora a estrutura ram já está definida
-    core *core;
-    ProcessManager* process_manager;
+    ram* memory_ram;        
+    core* core;  // Ponteiro para array de cores
+    ProcessManager* process_manager;  // Ponteiro para process_manager
     pthread_mutex_t scheduler_mutex;
     pthread_mutex_t memory_mutex;     
     pthread_mutex_t resource_mutex;   

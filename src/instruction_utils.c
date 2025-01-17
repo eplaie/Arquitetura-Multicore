@@ -42,12 +42,18 @@ unsigned short int ula(unsigned short int operating_a, unsigned short int operat
 }
 
 unsigned short int verify_address(ram* memory_ram, char* address, unsigned short int num_positions) {
+    printf("\n[Verify] Verificando endereço: %s (tamanho: %d)", address, num_positions);
+    
     if (!memory_ram || !address || address[0] != 'A') {
+        printf("\n[Verify] Erro: Parâmetros inválidos ou formato incorreto");
         return 0;
     }
 
     unsigned short int pos = atoi(&address[1]);
+    printf("\n[Verify] Posição calculada: %d", pos);
+    
     if (pos + num_positions >= NUM_MEMORY) {
+        printf("\n[Verify] Erro: Posição fora dos limites");
         return 0;
     }
 
@@ -88,38 +94,60 @@ void load(cpu* cpu, const char* instruction, unsigned short int index_core) {
 }
 
 void store(cpu* cpu, ram* memory_ram, const char* instruction, unsigned short int index_core) {
+    printf("\n[Store] Iniciando instrução: '%s'", instruction);
 
     char *instruction_copy, *token, *register_name, *memory_address;
     char buffer[10]; 
     unsigned short int register_index, register_value;
 
     instruction_copy = strdup(instruction);
+    if (!instruction_copy) {
+        printf("\n[Store] Erro: Falha ao copiar instrução");
+        return;
+    }
 
+    // Verifica STORE
     token = strtok(instruction_copy, " "); 
     if (strcmp(token, "STORE") != 0) {
-        printf("Error: Invalid instruction - STORE\n");
+        printf("\n[Store] Erro: Instrução inválida - STORE\n");
         free(instruction_copy);
         return;
     }
 
+    // Pega registro fonte
     token = strtok(NULL, " ");
     register_name = token;
+    printf("\n[Store] Registro fonte: %s", register_name);
 
+    // Pega endereço destino
     token = strtok(NULL, " ");
     memory_address = token;
+    printf("\n[Store] Endereço destino: %s", memory_address);
 
+    // Obtém índice do registro
     register_index = get_register_index(register_name);
+    printf("\n[Store] Índice do registro: %d", register_index);
 
+    // Obtém valor do registro
     register_value = cpu->core[index_core].registers[register_index];
+    printf("\n[Store] Valor do registro: %d", register_value);
 
+    // Converte para string
     sprintf(buffer, "%d", register_value);  
+    printf("\n[Store] Valor convertido: %s", buffer);
 
+    // Verifica endereço
     unsigned short int address = verify_address(memory_ram, memory_address, strlen(buffer));
+    printf("\n[Store] Endereço verificado: %d", address);
     
+    // Escreve na RAM
     write_ram(memory_ram, address, buffer);
+    printf("\n[Store] Escrita na RAM concluída");
 
     free(instruction_copy);
+    printf("\n[Store] Instrução concluída\n");
 }
+
 
 unsigned short int add(cpu* cpu, const char* instruction, unsigned short int index_core) {
     char *instruction_copy, *token, *register_name1, *register_name2;
@@ -375,7 +403,7 @@ void if_i(cpu* cpu, char* program, instruction_processor* instr_processor, unsig
             if (!temp_inst) break;
 
             instr_processor->instruction = temp_inst;
-            instr_processor->type = instruction_decode(instr_processor->instruction, instr_processor->num_instruction);
+            instr_processor->type = instruction_decode(instr_processor->instruction);
 
             free(instruction_copy);
             instruction_copy = strdup(instr_processor->instruction);
@@ -464,8 +492,7 @@ void else_i(cpu* cpu, char* program, instruction_processor* instr_processor, uns
             if (!temp_inst) break;
 
             instr_processor->instruction = temp_inst;
-            instr_processor->type = instruction_decode(instr_processor->instruction, 
-                                                     instr_processor->num_instruction);
+            instr_processor->type = instruction_decode(instr_processor->instruction);
 
             free(instruction_copy);
             instruction_copy = strdup(instr_processor->instruction);
@@ -654,8 +681,13 @@ char* instruction_fetch(cpu* cpu, char* program, unsigned short int index_core) 
 }
 
 
-type_of_instruction instruction_decode(char* instruction, unsigned short int /*num_instruction*/) {
-    if (!instruction) return INVALID;
+type_of_instruction instruction_decode(const char* instruction) {
+    if (!instruction) {
+        printf("\n[Decode] Erro: Instrução nula");
+        return INVALID;
+    }
+
+    printf("\n[Decode] Decodificando: %s", instruction);
 
     // Remove leading whitespaces
     while (*instruction && isspace((unsigned char)*instruction)) {
@@ -675,6 +707,7 @@ type_of_instruction instruction_decode(char* instruction, unsigned short int /*n
     if (strncmp(instruction, "ELSE", 4) == 0) return ELSE;
     if (strncmp(instruction, "ELS_END", 7) == 0) return ELS_END;
 
+    printf("\n[Decode] Erro: Instrução inválida: %s", instruction);
     return INVALID;
 }
 

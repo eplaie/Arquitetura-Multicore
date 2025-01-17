@@ -5,7 +5,7 @@
 #include "common_types.h"
 
 #define PROGRAM_SEPARATOR "\0\0\0"  // Três bytes nulos para separar programas
-#define MAX_PROGRAM_SIZE 1024
+#define RAM_SIZE 1024
 
 // Funções de leitura e análise de programa
 char* read_program(const char* filename);  

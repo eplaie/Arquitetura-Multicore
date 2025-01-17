@@ -5,6 +5,8 @@
 #include <time.h>
 #include <string.h>
 #include <stdarg.h>
+#include "common_types.h"  
+#include "pcb.h"          
 
 // Cores para diferentes partes do display
 #define COLOR_RESET   "\x1b[0m"
@@ -34,10 +36,17 @@ void show_core_state(int core_id, int pid, const char* status);
 void show_thread_status(int core_id, const char* status);
 void show_process_state(int pid, const char* old_state, const char* new_state);
 void show_scheduler_state(int ready_count, int blocked_count);
-void show_system_metrics(int cycle, int total, int completed, int instructions);
+void show_system_metrics(int cycle, int instructions);
 
 // Funções de estatísticas
 void show_stage_statistics(int if_stalls, int mem_stalls, int data_hazards);
 void show_final_summary(int total_cycles, int total_processes, int completed);
+
+
+void show_pipeline_status(int cycle, int core_id, PCB* process);
+
+void show_policy_menu(void);
+void show_policy_selected(const char* policy_name);
+void display_final_statistics(architecture_state* state, Policy* policy);
 
 #endif

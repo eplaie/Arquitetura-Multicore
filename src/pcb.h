@@ -5,6 +5,7 @@
 #include "architecture.h"
 #include "common_types.h"
 #include "cpu.h" 
+#include "policies/policy.h"
 
 typedef enum {
     NEW,
@@ -14,34 +15,7 @@ typedef enum {
     FINISHED
 } process_state;
 
-typedef struct PCB {
-    // Identificação
-    int pid;
-    process_state state;
-    int core_id;
-    
-    // Controle de execução
-    int PC;
-    int cycles_executed;
-    int quantum_remaining;
-    int base_address;
-    int memory_limit;
-    bool was_completed;
-    
-    // Registradores
-    unsigned short int* registers;
-    
-    // Recursos e I/O
-    bool using_io;
-    int io_block_cycles;
-    bool waiting_resource;
-    char* resource_name;
-    
-    // Estatísticas
-    int total_instructions;
-    int waiting_time;
-    int turnaround_time;
-} PCB;
+struct Policy;
 
 typedef struct ProcessManager {
     PCB** ready_queue;
@@ -49,11 +23,36 @@ typedef struct ProcessManager {
     int ready_count;
     int blocked_count;
     int quantum_size;
-    int next_pid;
+    int current_time;
     pthread_mutex_t queue_mutex;
     pthread_mutex_t resource_mutex;
     pthread_cond_t resource_condition;
+    struct Policy* policy;  // Mudando para usar a forward declaration
 } ProcessManager;
+
+typedef struct PCB {
+    int pid;
+    process_state state;
+    int core_id;
+    unsigned short int PC;
+    unsigned short int* registers;
+    int cycles_executed;
+    int quantum_remaining;
+    unsigned int base_address;
+    unsigned int memory_limit;
+    bool was_completed;
+    bool using_io;
+    int io_block_cycles;
+    bool waiting_resource;
+    char* resource_name;
+    int total_instructions;
+    int waiting_time;
+    int turnaround_time;
+    // Adicionando completion_time
+    int completion_time;
+    int start_time; 
+    bool already_freed;
+} PCB;
 
 // Funções do PCB
 PCB* create_pcb(void);

@@ -37,73 +37,120 @@ static void handle_process_completion(architecture_state* state, cpu* cpu,
     process->was_completed = true;
     process->cycles_executed = cycle_count;
 
+    lock_process_manager(cpu->process_manager);
     release_core(cpu, core_id);
-    if (instruction) free(instruction);
+    unlock_process_manager(cpu->process_manager);
+
+    if (instruction) {
+        free(instruction);
+    }
+
+    // Verifica se todos os processos foram concluídos
+    if (state->completed_processes >= total_processes) {
+        pthread_mutex_lock(&state->global_mutex);
+        state->program_running = false;
+        pthread_mutex_unlock(&state->global_mutex);
+    }
 }
 
 void execute_pipeline_cycle(architecture_state* state, cpu* cpu,
-                          ram* memory_ram, int core_id, int cycle_count) {
-    if (!state || !cpu || !memory_ram || !memory_ram->vector) {
-        printf("[Core %d] Erro: Parâmetros inválidos\n", core_id);
-        return;
-    }
+                         ram* memory_ram, int core_id, int cycle_count) {
+   // Removemos a verificação do memory_ram passado como parâmetro
+   // e usamos apenas o memory_ram da CPU
+   if (!state || !cpu || !cpu->memory_ram || !cpu->memory_ram->vector || 
+       !cpu->memory_ram->initialized) {
+       printf("\n[Core %d] Erro: CPU ou RAM inválida", core_id);
+       return;
+   }
 
-    pthread_mutex_lock(&state->pipeline->pipeline_mutex);
+   ram* active_ram = cpu->memory_ram; // Usar RAM da CPU
 
+//    printf("\n[Debug] Pipeline - Core %d:", core_id);
+//    printf("\n - RAM: %p", (void*)active_ram);
+//    printf("\n - Vector: %p", (void*)active_ram->vector);
 
-    core* current_core = &cpu->core[core_id];
-    if (!current_core) {
-        printf("[Core %d] Erro: Core inválido\n", core_id);
-        show_core_state(core_id, -1, "ERRO");
-        pthread_mutex_unlock(&state->pipeline->pipeline_mutex);
-        return;
-    }
+   pthread_mutex_lock(&active_ram->mutex);
+   pthread_mutex_lock(&state->pipeline->pipeline_mutex);
+   lock_process_manager(cpu->process_manager);
 
-    lock_process_manager(cpu->process_manager);
-    PCB* current_process = current_core->current_process;
+   core* current_core = &cpu->core[core_id];
+   PCB* current_process = current_core->current_process;
 
-    if (!current_process) {
-        show_core_state(core_id, -1, "Ocioso");
-        unlock_process_manager(cpu->process_manager);
-        pthread_mutex_unlock(&state->pipeline->pipeline_mutex);
-        return;
-    }
+   if (!current_process) {
+       unlock_process_manager(cpu->process_manager);
+       pthread_mutex_unlock(&state->pipeline->pipeline_mutex);
+       pthread_mutex_unlock(&active_ram->mutex);
+       return;
+   }
 
-    show_pipeline_start(cycle_count, core_id, current_process->pid);
+   show_pipeline_start(cycle_count, core_id, current_process->pid);
+   
+//    printf("\n[Debug] Pipeline - Core %d, Processo %d:", core_id, current_process->pid);
+   printf("\n - Base address: %d", current_process->base_address);
+   printf("\n - PC: %d", current_process->PC);
+   printf("\n - Quantum remaining: %d", current_core->quantum_remaining);
 
-    if (current_process->PC >= current_process->memory_limit) {
-        printf("[Core %d] Processo %d: limite de memória atingido\n", core_id, current_process->pid);
-        handle_process_completion(state, cpu, current_process, core_id, cycle_count, NULL);
-        unlock_process_manager(cpu->process_manager);
-        pthread_mutex_unlock(&state->pipeline->pipeline_mutex);
-        return;
-    }
+   if (current_process->PC >= current_process->memory_limit) {
+       printf("[Core %d] Processo %d: limite de memória atingido\n", core_id, current_process->pid);
+       handle_process_completion(state, cpu, current_process, core_id, cycle_count, NULL);
+       unlock_process_manager(cpu->process_manager);
+       pthread_mutex_unlock(&state->pipeline->pipeline_mutex);
+       pthread_mutex_unlock(&active_ram->mutex);
+       return;
+   }
 
-    // 1. Instruction Fetch
-    pthread_mutex_lock(&state->pipeline->IF.stage_mutex);
-    char* instruction = NULL;
+   // 1. Instruction Fetch
+   pthread_mutex_lock(&state->pipeline->IF.stage_mutex);
+   char* instruction = NULL;
 
-    if (!memory_ram->vector) {
-        printf("[Core %d] Erro: RAM inválida\n", core_id);
-        pthread_mutex_unlock(&state->pipeline->IF.stage_mutex);
-        unlock_process_manager(cpu->process_manager);
-        pthread_mutex_unlock(&state->pipeline->pipeline_mutex);
-        return;
-    }
+   if (!active_ram->vector) {
+       printf("[Core %d] Erro: RAM inválida\n", core_id);
+       pthread_mutex_unlock(&state->pipeline->IF.stage_mutex);
+       unlock_process_manager(cpu->process_manager);
+       pthread_mutex_unlock(&state->pipeline->pipeline_mutex);
+       pthread_mutex_unlock(&active_ram->mutex);
+       return;
+   }
 
-    instruction = get_line_of_program(
-        memory_ram->vector + current_process->base_address,
-        current_process->PC
-    );
+   printf("[Core %d] Buscando instrução: base=%d, PC=%d\n", 
+          core_id, current_process->base_address, current_process->PC);
 
-    if (!instruction || strlen(instruction) == 0) {
-        printf("[Core %d] Erro: Instrução inválida\n", core_id);
-        handle_process_completion(state, cpu, current_process, core_id, cycle_count, instruction);
-        pthread_mutex_unlock(&state->pipeline->IF.stage_mutex);
-        unlock_process_manager(cpu->process_manager);
-        pthread_mutex_unlock(&state->pipeline->pipeline_mutex);
-        return;
-    }
+   instruction = get_line_of_program(
+       active_ram->vector + current_process->base_address,
+       current_process->PC
+   );
+
+if (!instruction || strlen(instruction) == 0 || current_process->PC >= current_process->memory_limit) {
+    printf("\n[Core %d] Processo %d finalizado\n", core_id, current_process->pid);
+    
+    pthread_mutex_lock(&state->global_mutex);
+    current_process->state = FINISHED;
+    current_process->was_completed = true;
+    state->completed_processes++;
+    
+    // Atualizar métricas finais do processo
+    current_process->completion_time = cycle_count;
+    current_process->turnaround_time = cycle_count - current_process->start_time;
+    pthread_mutex_unlock(&state->global_mutex);
+    
+    show_process_state(current_process->pid, "RUNNING", "FINISHED");
+        
+    // Liberar o core de forma segura
+    current_core->current_process = NULL;
+    current_core->is_available = true;
+    current_core->quantum_remaining = 0;
+    memset(current_core->registers, 0, NUM_REGISTERS * sizeof(unsigned short int));
+    
+    // Liberar recursos na ordem correta
+    if (instruction) free(instruction);
+    
+    pthread_mutex_unlock(&state->pipeline->IF.stage_mutex);
+    unlock_process_manager(cpu->process_manager);
+    pthread_mutex_unlock(&state->pipeline->pipeline_mutex);
+    pthread_mutex_unlock(&active_ram->mutex);
+    
+    return;
+}
 
     show_pipeline_fetch(instruction);
     state->pipeline->IF.instruction = instruction;
@@ -143,6 +190,7 @@ void execute_pipeline_cycle(architecture_state* state, cpu* cpu,
     // Atualização de estado
     pthread_mutex_lock(&state->global_mutex);
     current_process->PC++;
+    current_core->PC = current_process->PC;
     current_process->total_instructions++;
     state->total_instructions++;
     pthread_mutex_unlock(&state->global_mutex);
@@ -151,16 +199,32 @@ void execute_pipeline_cycle(architecture_state* state, cpu* cpu,
     current_process->cycles_executed = cycle_count;
 
     if (current_core->quantum_remaining <= 0) {
-        printf("[Core %d] Quantum expirado - Processo %d\n", core_id, current_process->pid);
-        show_process_state(current_process->pid, "RUNNING", "READY");
+    printf("\n[Debug] Quantum expirado - Core %d", core_id);
+    printf("\n - Processo: %d", current_process->pid);
+    printf("\n - PC atual: %d", current_process->PC);
+    printf("\n - Instruções executadas: %d", current_process->total_instructions);
+
+    // Atualiza estado
+    current_process->state = READY;
+    show_process_state(current_process->pid, "RUNNING", "READY");
 
         pthread_mutex_lock(&state->global_mutex);
         state->context_switches++;
         pthread_mutex_unlock(&state->global_mutex);
 
-        current_process->state = READY;
-        cpu->process_manager->ready_queue[cpu->process_manager->ready_count++] = current_process;
+        // Usa a função da política para tratar quantum expirado
+        cpu->process_manager->policy->on_quantum_expired(cpu->process_manager, current_process);
+
+        // printf("\n[Debug] Antes de release_core:");
+       printf("\n - Ready count: %d", cpu->process_manager->ready_count);
+       printf("\n - Core %d quantum: %d", core_id, current_core->quantum_remaining);
+
         release_core(cpu, core_id);
+
+    //            printf("\n[Debug] Após release_core:");
+    //    printf("\n - Ready count: %d", cpu->process_manager->ready_count);
+    //    printf("\n - Core disponível: %d", current_core->is_available);
+
     }
 
     if (instruction) {
@@ -169,9 +233,9 @@ void execute_pipeline_cycle(architecture_state* state, cpu* cpu,
 
     unlock_process_manager(cpu->process_manager);
     pthread_mutex_unlock(&state->pipeline->pipeline_mutex);
+    pthread_mutex_unlock(&memory_ram->mutex);
 }
 
-// Funções auxiliares do pipeline
 type_of_instruction decode_instruction(const char* instruction) {
     if (!instruction) return INVALID;
     

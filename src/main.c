@@ -2,12 +2,27 @@
 #include "os_display.h"
 #include "pcb.h"
 #include "reader.h"
-#include <unistd.h>
-#include <stdbool.h>
 #include "libs.h"
 #include "ram.h"
+#include "policies/policy.h"
+#include "policies/policy_selector.h"
 
-#define NUM_PROGRAMS 10
+// Implementação da função clean_ready_queue
+void clean_ready_queue(ProcessManager* pm) {
+    if (!pm) return;
+    
+    // Remove processos finalizados da fila de prontos
+    for (int i = 0; i < pm->ready_count; i++) {
+        if (pm->ready_queue[i]->state == FINISHED) {
+            // Move os processos restantes
+            for (int j = i; j < pm->ready_count - 1; j++) {
+                pm->ready_queue[j] = pm->ready_queue[j + 1];
+            }
+            pm->ready_count--;
+            i--; // Ajusta o índice após a remoção
+        }
+    }
+}
 
 void init_system(void) {
     show_os_banner();
@@ -17,17 +32,14 @@ void init_system(void) {
 int main(void) {
     init_system();
 
-    // Alocação dos componentes principais
+    // Inicialização dos componentes
     cpu* cpu = malloc(sizeof(cpu));
     ram* memory_ram = allocate_ram(NUM_MEMORY);
 
-    printf("[Sistema] Estado inicial:\n");
-    printf("- CPU: %p\n", (void*)cpu);
-    printf("- RAM: %p\n", (void*)memory_ram);
-    printf("- RAM vector: %p\n", memory_ram ? (void*)memory_ram->vector : NULL);
-
     if (!memory_ram || !memory_ram->vector) {
-        printf("[Sistema] Erro: Falha na alocação da RAM\n");
+        printf("[Sistema] Erro: Falha na alocação de memória\n");
+        printf(" - RAM: %p\n", (void*)memory_ram);
+        printf(" - Vector: %p\n", (void*)(memory_ram ? memory_ram->vector : NULL));
         return 1;
     }
 
@@ -35,188 +47,158 @@ int main(void) {
     peripherals* p = malloc(sizeof(peripherals));
     architecture_state* arch_state = malloc(sizeof(architecture_state));
 
-    if (!memory_ram || !memory_ram->vector) {
-        printf("[Sistema] Erro: Falha na alocação da RAM\n");
-        return 1;
+    // 1. Primeiro inicializar o Process Manager
+    ProcessManager* pm = init_process_manager(DEFAULT_QUANTUM);
+    if (!pm) {
+        printf("\n[Sistema] ERRO: Falha ao inicializar Process Manager");
+        exit(1);
     }
 
-    printf("[Sistema] RAM inicial: %p\n", (void*)memory_ram->vector);
+    // 2. Atribuir o Process Manager à CPU e ao arch_state
+    cpu->process_manager = pm;
+    arch_state->process_manager = pm;
 
-    // Inicialização da arquitetura
+    // 3. Inicialização da arquitetura
     init_architecture(cpu, memory_ram, memory_disc, p, arch_state);
 
-    printf("[Sistema] RAM após init: %p\n", (void*)memory_ram->vector);
-
-    if (!memory_ram->vector) {
-        printf("[Sistema] Erro: Falha na alocação da RAM\n");
+    // 4. Seleção da política de escalonamento
+    printf("\n[Sistema] Selecionando política de escalonamento\n");
+    Policy* selected_policy = select_scheduling_policy();
+    if (!selected_policy) {
+        printf("\n[Sistema] ERRO: Política nula");
+        exit(1);
     }
 
-    // Inicializa threads dos cores
-    for (int i = 0; i < NUM_CORES; i++) {
-        if (!memory_ram || !memory_ram->vector) {
-            printf("[Sistema] Erro: RAM inválida - Core %d\n", i);
-            break;
-        }
-        core_thread_args* args = malloc(sizeof(core_thread_args));
-        if (!args) {
-            printf("[Sistema] Erro: Falha na alocação - Core %d\n", i);
-            return 1;
-        }
-        args->cpu = cpu;
-        args->memory_ram = memory_ram;
-        args->core_id = i;
-        args->state = arch_state;
-        cpu->core[i].arch_state = arch_state;
-
-        if (pthread_create(&cpu->core[i].thread, NULL, core_execution_thread, args) != 0) {
-            printf("[Sistema] Erro: Falha ao criar thread - Core %d\n", i);
-            return 1;
-        }
-        show_thread_status(i, "Iniciada");
+    if (!cpu->process_manager) {
+        printf("\n[Sistema] ERRO: Process manager nulo após inicialização");
+        exit(1);
     }
 
-    printf("[Sistema] Carregando programas\n");
+    cpu->process_manager->policy = selected_policy;
+
+    // Carregamento dos programas
+    printf("\n[Sistema] Carregando programas\n");
     char* program_files[] = {"program.txt", "program2.txt", "program3.txt"};
     int num_programs = sizeof(program_files) / sizeof(program_files[0]);
+    unsigned int base_address;
+    char* program;
 
     for (int i = 0; i < num_programs; i++) {
         char filename[100];
         snprintf(filename, sizeof(filename), "dataset/%s", program_files[i]);
 
         PCB* process = create_pcb();
-        if (process != NULL) {
-            char* program = read_program(filename);
-            if (program) {
-                unsigned int base_address = i * (NUM_MEMORY / MAX_PROCESSES);
-                process->base_address = base_address;
-                process->memory_limit = base_address + (NUM_MEMORY / MAX_PROCESSES) - 1;
-
-                printf("[Sistema] Programa %d:\n", i);
-                printf("- Base: %u\n", base_address);
-                printf("- Limite: %u\n", process->memory_limit);
-
-                load_program_on_ram(cpu, program, base_address);
-                process->state = READY;
-
-                if (cpu->process_manager->ready_count < MAX_PROCESSES) {
-                    cpu->process_manager->ready_queue[cpu->process_manager->ready_count++] = process;
-                }
-
-                show_process_state(process->pid, "INITIALIZED", "READY");
-                free(program);
-            }
+        program = read_program(filename);
+        if (process && program) {
+            base_address = i * (NUM_MEMORY / MAX_PROCESSES);
+            process->base_address = base_address;
+            process->memory_limit = base_address + (NUM_MEMORY / MAX_PROCESSES) - 1;
+            
+            load_program_on_ram(cpu, program, base_address);
+            process->state = READY;
+            cpu->process_manager->ready_queue[cpu->process_manager->ready_count++] = process;
+            
+            show_process_state(process->pid, "CREATED", "READY");
+            free(program);
         }
     }
 
-    printf("[Sistema] Primeiro processo:\n");
-    if (cpu->process_manager->ready_queue[0] != NULL) {
-        PCB* first_process = cpu->process_manager->ready_queue[0];
-        printf("- PID: %d\n", first_process->pid);
-        printf("- Estado: %s\n", state_to_string(first_process->state));
-        printf("- Base: %d\n", first_process->base_address);
-        printf("- Limite: %d\n", first_process->memory_limit);
-    } else {
-        printf("[Sistema] Erro: Processo inicial não encontrado\n");
-    }
+    show_scheduler_state(cpu->process_manager->ready_count, 0);
 
-    printf("[Status] Process Manager:\n");
-    printf("- Processos prontos: %d\n", cpu->process_manager->ready_count);
-    printf("- Endereço: %p\n", (void*)cpu->process_manager);
-
-    printf("[Status] CPU:\n");
-    printf("- Endereço: %p\n", (void*)cpu);
-    for (int i = 0; i < NUM_CORES; i++) {
-        printf("- Core %d: %s\n", i,
-               cpu->core[i].is_available ? "Disponível" : "Ocupado");
-    }
-
-    printf("[Status] Total de processos: %d\n", cpu->process_manager->ready_count);
-
-    printf("[Sistema] Iniciando execução\n");
-    arch_state->program_running = true;
+    // Loop principal de execução
+    printf("\n[Sistema] Iniciando execução\n");
     int cycle_count = 0;
+    arch_state->program_running = true;
 
-    while (arch_state->program_running && cycle_count < MAX_CYCLES) {
-        cycle_count++;
-        show_cycle_start(cycle_count);
+    // Verificações de segurança antes do loop
+    if (!arch_state->pipeline) {
+        printf("\n[Sistema] ERRO: Pipeline não inicializado");
+        exit(1);
+    }
 
-        check_blocked_processes(cpu);
+    if (!cpu->memory_ram || !cpu->memory_ram->vector) {
+        printf("\n[Sistema] ERRO: RAM inválida antes da execução");
+        exit(1);
+    }
 
-        for (int core_id = 0; core_id < NUM_CORES; core_id++) {
-            if (cpu->core[core_id].is_available) {
-                schedule_next_process(cpu, core_id);
+        while (cycle_count < MAX_CYCLES) {
+    cycle_count++;
+    cpu->process_manager->current_time = cycle_count;
+    show_cycle_start(cycle_count);
+    
+    // Escalonar processos para cores disponíveis
+for (int core_id = 0; core_id < NUM_CORES; core_id++) {
+    if (cpu->core[core_id].is_available && 
+        cpu->process_manager->ready_count > 0) {
+        
+        // Garantir que o quantum seja resetado
+        cpu->core[core_id].quantum_remaining = cpu->process_manager->quantum_size;
+        schedule_next_process(cpu, core_id);
+    }
+}
+
+    // Executar processos nos cores
+    int running_count = 0;
+    for (int core_id = 0; core_id < NUM_CORES; core_id++) {
+        if (!cpu->core[core_id].is_available && 
+            cpu->core[core_id].current_process && 
+            cpu->core[core_id].current_process->state == RUNNING) {
+            
+            running_count++;
+            execute_pipeline_cycle(arch_state, cpu, cpu->memory_ram, core_id, cycle_count);
+            
+            // Verificar quantum após execução
+            if (cpu->core[core_id].quantum_remaining <= 0) {
+                PCB* current_process = cpu->core[core_id].current_process;
+                
+                // Usar a política para tratar o quantum expirado
+                cpu->process_manager->policy->on_quantum_expired(
+                    cpu->process_manager, 
+                    current_process
+                );
+                
+                // Liberar o core
+                release_core(cpu, core_id);
             }
         }
+    }
 
-        bool all_idle = true;
-        int ready_count = cpu->process_manager->ready_count;
-        int running_count = 0;
+    // Verificar término
+    if (cpu->process_manager->ready_count == 0 && running_count == 0) {
+        bool all_done = true;
+        for (int i = 0; i < total_processes; i++) {
+            if (all_processes[i] && all_processes[i]->state != FINISHED) {
+                all_done = false;
+                break;
+            }
+        }
+        
+        if (all_done) {
+            printf("\n[Sistema] Todos os processos finalizaram execução");
+            break;
+        }
+    }
 
+    show_system_metrics(cycle_count, arch_state->total_instructions);
+    show_scheduler_state(cpu->process_manager->ready_count, 
+                        cpu->process_manager->blocked_count);
+
+    usleep(50000);
+}
+
+
+    printf("\n[Sistema] Limpando recursos...");
+    
+    // Parar threads
+    if (cpu && cpu->core) {
         for (int i = 0; i < NUM_CORES; i++) {
-            if (!cpu->core[i].is_available && cpu->core[i].current_process) {
-                all_idle = false;
-                running_count++;
-            }
+            cpu->core[i].running = false;
         }
-
-        if (all_idle && ready_count == 0 && cpu->process_manager->blocked_count == 0) {
-            arch_state->program_running = false;
-            printf("[Sistema] Todos os processos concluídos\n");
-        }
-
-        printf("[Ciclo %d] Status:\n", cycle_count);
-        printf("- Prontos: %d\n", ready_count);
-        printf("- Executando: %d\n", running_count);
-        printf("- Bloqueados: %d\n", cpu->process_manager->blocked_count);
-        printf("- Instruções: %d\n", arch_state->total_instructions);
-        printf("- Trocas de contexto: %d\n", arch_state->context_switches);
-
-        printf("[Ciclo %d] Cores:\n", cycle_count);
-        for (int i = 0; i < NUM_CORES; i++) {
-            printf("- Core %d: ", i);
-            if (!cpu->core[i].is_available && cpu->core[i].current_process) {
-                printf("P%d (PC=%d, Q=%d)\n",
-                    cpu->core[i].current_process->pid,
-                    cpu->core[i].current_process->PC,
-                    cpu->core[i].quantum_remaining);
-            } else {
-                printf("Ocioso\n");
-            }
-        }
-
-        usleep(10000); // 10ms entre ciclos
+        usleep(100000); // Dar tempo para threads finalizarem
     }
 
-    printf("[Sistema] Finalizando processos ativos\n");
-
-    for (int i = 0; i < NUM_CORES; i++) {
-        if (!cpu->core[i].is_available && cpu->core[i].current_process) {
-            printf("[Sistema] Aguardando P%d - Core %d\n",
-                cpu->core[i].current_process->pid, i);
-        }
-        cpu->core[i].running = false;
-    }
-
-    for (int i = 0; i < NUM_CORES; i++) {
-        pthread_join(cpu->core[i].thread, NULL);
-        show_thread_status(i, "Finalizada");
-    }
-
-    printf("[Sistema] Estatísticas finais:\n");
-    printf("- Ciclos: %d\n", cycle_count);
-    printf("- Processos: %d/%d\n", arch_state->completed_processes, total_processes);
-    printf("- Instruções: %d\n", arch_state->total_instructions);
-    printf("- Média instruções/ciclo: %.2f\n",
-           (float)arch_state->total_instructions / cycle_count);
-    printf("- Média turnaround: %.2f ciclos\n",
-           arch_state->completed_processes > 0 ?
-           (float)cycle_count / arch_state->completed_processes : 0);
-    printf("- Trocas de contexto: %d\n", arch_state->context_switches);
-    printf("- Utilização dos cores: %.2f%%\n",
-           (float)(arch_state->total_instructions * 100) / (cycle_count * NUM_CORES));
-
+    // Limpeza final
     printf("[Sistema] Liberando recursos\n");
-    cleanup_cpu_threads(cpu);
     free_architecture(cpu, memory_ram, memory_disc, p, arch_state);
 
     printf("[Sistema] Execução finalizada\n");
