@@ -11,7 +11,7 @@ void add_cache(cache **cache_table, unsigned short int address, unsigned short i
             printf("memory allocation failed\n");
             exit(1);
         }
-        item->address = address; 
+        item->address = address;
         HASH_ADD(hh, *cache_table, address, sizeof(unsigned short int), item);
     }
 
@@ -39,7 +39,7 @@ void remove_cache(cache **cache_table, unsigned short int address) {
 
 void print_cache(cache *cache_table) {
     cache *item;
-    
+
     for (item = cache_table; item != NULL; item = (cache*)(item->hh.next)) {
         printf("address: %hu, data: %hu\n", item->address, item->data);
     }
@@ -47,7 +47,7 @@ void print_cache(cache *cache_table) {
 
 void empty_cache(cache **cache_table) {
     cache *item, *tmp;
-    
+
     HASH_ITER(hh, *cache_table, item, tmp) {
         HASH_DEL(*cache_table, item);
         free(item);

@@ -1,261 +1,214 @@
 #include "pcb.h"
 #include "cpu.h"
-#include <string.h>
 #include "os_display.h"
-
-ProgramInfo programs[10];
-int num_programs = 0;
-
-ProcessManager* init_process_manager(int quantum_size) {
-    ProcessManager* pm = (ProcessManager*)malloc(sizeof(ProcessManager));
-    if (!pm) {
-        printf("Failed to allocate process manager\n");
-        exit(1);
-    }
-
-    pm->ready_queue = (PCB**)malloc(sizeof(PCB*) * MAX_PROCESSES);
-    pm->blocked_queue = (PCB**)malloc(sizeof(PCB*) * MAX_PROCESSES);
-    if (!pm->ready_queue || !pm->blocked_queue) {
-        printf("Failed to allocate process queues\n");
-        exit(1);
-    }
-
-    pm->ready_count = 0;
-    pm->blocked_count = 0;
-    pm->next_pid = 0;
-    pm->quantum_size = quantum_size;
-
-    printf("Process manager initialized (quantum: %d)\n", quantum_size);
-    printf("Ready queue initialized with size %d\n", MAX_PROCESSES);
-
-    return pm;
-}
 
 PCB* all_processes[MAX_PROCESSES];
 int total_processes = 0;
 
-PCB* create_process(ProcessManager* pm) {
-    if (total_processes >= MAX_PROCESSES) return NULL;
-
-    PCB* pcb = (PCB*)malloc(sizeof(PCB));
-    if (pcb == NULL) {
-        printf("Failed to allocate PCB\n");
-        exit(1);
+PCB* create_pcb(void) {
+    if (total_processes >= MAX_PROCESSES) {
+        printf("[Sistema] Erro: Limite de processos atingido (%d)\n", MAX_PROCESSES);
+        return NULL;
     }
 
-    // Inicialização normal...
-    pcb->pid = pm->next_pid++;
-    pcb->state = READY;
-    pcb->priority = 0;
-    pcb->PC = 0;
-    pcb->core_id = -1;
-    pcb->quantum = pm->quantum_size;
-    pcb->has_io = false;
-    pcb->total_instructions = 0;
-    pcb->cycles_executed = 0;
-    pcb->was_completed = false;
+    PCB* pcb = malloc(sizeof(PCB));
+    if (!pcb) {
+        printf("[Sistema] Erro: Falha na alocação de processo\n");
+        return NULL;
+    }
 
-    pcb->using_resource = false;
-    pcb->resource_address = -1;
-    pcb->blocked_by_pid = -1;
+    pcb->pid = total_processes;
+    pcb->state = NEW;
+    pcb->core_id = -1;
+    pcb->PC = 0;
+    pcb->cycles_executed = 0;
+    pcb->quantum_remaining = DEFAULT_QUANTUM;
+    pcb->base_address = 0;
+    pcb->memory_limit = NUM_MEMORY;
+    pcb->was_completed = false;
+    pcb->start_time = 0;  
+
+    pcb->registers = calloc(NUM_REGISTERS, sizeof(unsigned short int));
+    if (!pcb->registers) {
+        printf("[Sistema] Erro: Falha na alocação dos registradores\n");
+        free(pcb);
+        return NULL;
+    }
+
     pcb->using_io = false;
     pcb->io_block_cycles = 0;
+    pcb->waiting_resource = false;
+    pcb->resource_name = NULL;
 
-    // Inicialização dos novos campos
-    pcb->recovery_count = 0;
-    pcb->had_violations = false;
+    pcb->total_instructions = 0;
+    pcb->waiting_time = 0;
+    pcb->turnaround_time = 0;
+    pcb->completion_time = 0;
 
-    // Adiciona ao array global
     all_processes[total_processes++] = pcb;
+    printf("[Sistema] Processo %d criado\n", pcb->pid);
+    show_process_state(pcb->pid, "CREATED", "NEW");
 
     return pcb;
 }
 
-void set_process_base_address(PCB* pcb, int base_address) {
-    pcb->base_address = base_address;
-    printf("Updated process %d with base address %d\n", pcb->pid, base_address);
-}
+void save_context(PCB* pcb, core* current_core) {
+    if (!pcb || !current_core) return;
 
-void save_context(PCB* pcb, core* cur_core) {
-    if (!pcb || !cur_core) {
-        printf("Warning: Null pointer in save_context\n");
-        return;
-    }
-
-    pcb->PC = cur_core->PC;
-    if (pcb->registers && cur_core->registers) {
-        memcpy(pcb->registers, cur_core->registers, NUM_REGISTERS * sizeof(unsigned short int));
-    }
-}
-
-void restore_context(PCB* pcb, core* cur_core) {
-    // Restaura PC relativo
-    cur_core->PC = pcb->PC;
-    memcpy(cur_core->registers, pcb->registers, NUM_REGISTERS * sizeof(unsigned short int));
-}
-
-bool check_program_running(cpu* cpu) {
-    // Verifica se há processos na fila de prontos
-    if (cpu->process_manager->ready_count > 0) {
-        return true;
-    }
-
-    // Verifica se há processos na fila de bloqueados
-    if (cpu->process_manager->blocked_count > 0) {
-        return true;
-    }
-
-    // Verifica se há processos executando nos cores
-    for (int i = 0; i < NUM_CORES; i++) {
-        if (!cpu->core[i].is_available && cpu->core[i].current_process != NULL) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-void remove_from_ready_queue(ProcessManager* pm, int idx) {
-    for (int i = idx; i < pm->ready_count - 1; i++) {
-        pm->ready_queue[i] = pm->ready_queue[i + 1];
-    }
-    pm->ready_queue[pm->ready_count - 1] = NULL;
-    pm->ready_count--;
-}
-
-int count_ready_processes(ProcessManager* pm) {
-    if (!pm) return 0;
-
-    int ready_count = 0;
-    for (int i = 0; i < pm->ready_count; i++) {
-        PCB* process = pm->ready_queue[i];
-        if (process && process->state != BLOCKED && process->io_block_cycles == 0) {
-            ready_count++;
-        }
-    }
-    return ready_count;
-}
-
-void assign_to_core(cpu* cpu, PCB* process, int core_id) {
-    lock_core(&cpu->core[core_id]);
+    // Salva PC e outros estados
+    pcb->PC = current_core->PC;
+    memcpy(pcb->registers, current_core->registers, NUM_REGISTERS * sizeof(unsigned short int));
+    pcb->quantum_remaining = current_core->quantum_remaining;
     
-    cpu->core[core_id].current_process = process;
-    cpu->core[core_id].quantum_remaining = cpu->process_manager->quantum_size;
-    cpu->core[core_id].PC = process->PC;
-    cpu->core[core_id].is_available = false;
+    printf("\n[Context] Salvando contexto do processo %d", pcb->pid);
+    printf("\n - PC: %d", pcb->PC);
+    printf("\n - Quantum: %d", pcb->quantum_remaining);
+}
 
-    process->state = RUNNING;
-    process->core_id = core_id;
+void restore_context(PCB* pcb, core* current_core) {
+    if (!pcb || !current_core) return;
+
+    current_core->PC = pcb->PC;
+    memcpy(current_core->registers, pcb->registers, NUM_REGISTERS * sizeof(unsigned short int));
+    current_core->quantum_remaining = pcb->quantum_remaining;
     
-    show_process_state(process->pid, "READY", "RUNNING");
-    
-    unlock_core(&cpu->core[core_id]);
+    // printf("\n[Context] Restaurando contexto do processo %d", pcb->pid);
+    // printf("\n - PC: %d", current_core->PC);
+    printf("\n - Quantum: %d", current_core->quantum_remaining);
+}
+
+void free_pcb(PCB* pcb) {
+    if (!pcb) return;
+
+    if (pcb->registers) {
+        free(pcb->registers);
+    }
+    if (pcb->resource_name) {
+        free(pcb->resource_name);
+    }
+    free(pcb);
+}
+
+const char* state_to_string(process_state state) {
+    switch(state) {
+        case NEW: return "NEW";
+        case READY: return "READY";
+        case RUNNING: return "RUNNING";
+        case BLOCKED: return "BLOCKED";
+        case FINISHED: return "FINISHED";
+        default: return "UNKNOWN";
+    }
+}
+
+ProcessManager* init_process_manager(int quantum_size) {
+    ProcessManager* pm = malloc(sizeof(ProcessManager));
+    if (!pm) {
+        printf("[Sistema] Erro: Falha na alocação do gerenciador\n");
+        return NULL;
+    }
+
+    // printf("\n[Debug] Inicializando Process Manager");
+    // printf("\n - Endereço: %p", (void*)pm);
+
+    pm->ready_queue = malloc(sizeof(PCB*) * MAX_PROCESSES);
+    pm->blocked_queue = malloc(sizeof(PCB*) * MAX_PROCESSES);
+
+    if (!pm->ready_queue || !pm->blocked_queue) {
+        printf("[Sistema] Erro: Falha na alocação das filas\n");
+        free(pm);
+        return NULL;
+    }
+
+    pm->ready_count = 0;
+    pm->blocked_count = 0;
+    pm->quantum_size = quantum_size;
+    pm->current_time = 0;
+    pm->policy = NULL;  
+
+    pthread_mutex_init(&pm->queue_mutex, NULL);
+    pthread_mutex_init(&pm->resource_mutex, NULL);
+    pthread_cond_init(&pm->resource_condition, NULL);
+
+    printf("[Sistema] Gerenciador de processos iniciado com sucesso\n");
+    return pm;
 }
 
 void schedule_next_process(cpu* cpu, int core_id) {
     if (!cpu || !cpu->process_manager) return;
 
-    lock_scheduler(cpu);
+    ProcessManager* pm = cpu->process_manager;
+    lock_process_manager(pm);
 
-    // Procura primeiro processo que pode ser executado
-    int selected_idx = -1;
-    PCB* next_process = NULL;
+    // printf("\n[Debug] Tentando escalonar processo para core %d", core_id);
+    printf("\n - Processos prontos: %d", pm->ready_count);
 
-    for (int i = 0; i < cpu->process_manager->ready_count; i++) {
-        PCB* process = cpu->process_manager->ready_queue[i];
-        if (!process) continue;
-
-        // Pula processo se estiver bloqueado
-        if (process->state == BLOCKED || process->io_block_cycles > 0) {
-            continue;
-        }
-
-        // Verifica se já está em execução em algum core
-        bool already_running = false;
-        for (int j = 0; j < NUM_CORES; j++) {
-            if (j != core_id && !cpu->core[j].is_available && 
-                cpu->core[j].current_process == process) {
-                already_running = true;
-                break;
+    if (pm->ready_count > 0) {
+        PCB* next_process = pm->policy->select_next(pm);
+        if (next_process) {
+            if (next_process->start_time == 0) {
+                next_process->start_time = pm->current_time;
             }
-        }
-
-        if (!already_running) {
-            next_process = process;
-            selected_idx = i;
-            break;
+            
+            // Resetar quantum e estado do core
+            cpu->core[core_id].quantum_remaining = pm->quantum_size;
+            cpu->core[core_id].is_available = false;
+            cpu->core[core_id].current_process = next_process;
+            cpu->core[core_id].PC = next_process->PC;
+            
+            next_process->state = RUNNING;
+            next_process->core_id = core_id;
+            
+            restore_context(next_process, &cpu->core[core_id]);
+            show_process_state(next_process->pid, "READY", "RUNNING");
+            
+            printf("\n[Debug] Processo %d escalonado para core %d", 
+                   next_process->pid, core_id);
+            printf("\n - PC: %d", next_process->PC);
+            printf("\n - Quantum: %d", cpu->core[core_id].quantum_remaining);
         }
     }
 
-    // Se não encontrou processo elegível
-    if (!next_process || selected_idx == -1) {
-        unlock_scheduler(cpu);
-        return;
-    }
-
-    // Remove da fila de prontos e configura
-    remove_from_ready_queue(cpu->process_manager, selected_idx);
-    assign_to_core(cpu, next_process, core_id);
-
-    unlock_scheduler(cpu);
+    unlock_process_manager(pm);
 }
 
-
-
 void check_blocked_processes(cpu* cpu) {
-    if (!cpu || !cpu->process_manager) return;
-
-    lock_scheduler(cpu);
     ProcessManager* pm = cpu->process_manager;
+    
+    lock_process_manager(pm);
 
     for (int i = 0; i < pm->blocked_count; i++) {
-        PCB* blocked_process = pm->blocked_queue[i];
-        if (!blocked_process) continue;
+        PCB* process = pm->blocked_queue[i];
+        if (!process) continue;
 
-        if (blocked_process->io_block_cycles > 0) {
-            blocked_process->io_block_cycles--;
-            printf("\nProcess %d I/O block cycles remaining: %d\n", 
-                   blocked_process->pid, blocked_process->io_block_cycles);
-            
-            if (blocked_process->io_block_cycles == 0) {
-                printf("\nProcess %d I/O block completed\n", blocked_process->pid);
+        if (process->io_block_cycles > 0) {
+            process->io_block_cycles--;
+            if (process->io_block_cycles == 0) {
+                process->state = READY;
+                pm->ready_queue[pm->ready_count++] = process;
                 
-                // Libera o recurso de I/O
-                blocked_process->using_io = false;
-                blocked_process->resource_address = -1;
-                blocked_process->state = READY;
-                
-                // Move para fila de prontos
-                pm->ready_queue[pm->ready_count++] = blocked_process;
-                
-                // Remove da fila de bloqueados
                 for (int j = i; j < pm->blocked_count - 1; j++) {
                     pm->blocked_queue[j] = pm->blocked_queue[j + 1];
                 }
-                pm->blocked_queue[pm->blocked_count - 1] = NULL;
                 pm->blocked_count--;
                 i--;
-                
-                printf("Process %d moved from BLOCKED to READY\n", 
-                       blocked_process->pid);
+
+                show_process_state(process->pid, "BLOCKED", "READY");
             }
         }
     }
 
-    unlock_scheduler(cpu);
+    unlock_process_manager(pm);
 }
 
-bool check_resource_available(cpu* cpu __attribute__((unused)), 
-                            int address, 
-                            int requesting_pid __attribute__((unused))) {
-    // Verifica se algum processo está usando o recurso
-    for (int i = 0; i < total_processes; i++) {
-        PCB* process = all_processes[i];
-        if (process && process->using_resource && 
-            process->resource_address == address &&
-            process->state != FINISHED) {
-            return false;
-        }
-    }
-    return true;
+void lock_process_manager(ProcessManager* pm) {
+    pthread_mutex_lock(&pm->queue_mutex);
+}
+
+void unlock_process_manager(ProcessManager* pm) {
+    pthread_mutex_unlock(&pm->queue_mutex);
+}
+
+int count_ready_processes(ProcessManager* pm) {
+    if (!pm) return 0;
+    return pm->ready_count;
 }

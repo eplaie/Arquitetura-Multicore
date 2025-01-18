@@ -1,9 +1,12 @@
 #ifndef PCB_H
 #define PCB_H
 
+#include "libs.h"
+#include "architecture.h"
 #include "common_types.h"
+#include "cpu.h" 
+#include "policies/policy.h"
 
-// Enumeração de estados do processo
 typedef enum {
     NEW,
     READY,
@@ -12,72 +15,65 @@ typedef enum {
     FINISHED
 } process_state;
 
-// Function prototype for state to string conversion
-const char* state_to_string(process_state state);
+struct Policy;
 
-// Definição do PCB
+typedef struct ProcessManager {
+    PCB** ready_queue;
+    PCB** blocked_queue;
+    int ready_count;
+    int blocked_count;
+    int quantum_size;
+    int current_time;
+    pthread_mutex_t queue_mutex;
+    pthread_mutex_t resource_mutex;
+    pthread_cond_t resource_condition;
+    struct Policy* policy;  // Mudando para usar a forward declaration
+} ProcessManager;
+
 typedef struct PCB {
     int pid;
     process_state state;
-    int priority;
-    int PC;
-    int base_address;
-    int memory_limit;
     int core_id;
-    int quantum;
-    bool has_io;
-    int blocked_time;
-    int total_instructions;
-    int cycles_executed;
-    bool was_completed;
+    unsigned short int PC;
     unsigned short int* registers;
-    // Novos campos para tratamento de erro
-    int recovery_count;    // Contador de recuperações
-    bool had_violations;   // Flag para indicar violações de memória
-
-    bool using_resource;    // Indica se está usando algum recurso
-    int resource_address;   // Endereço do recurso sendo usado
-    int blocked_by_pid;     // PID do processo que está bloqueando este
+    int cycles_executed;
+    int quantum_remaining;
+    unsigned int base_address;
+    unsigned int memory_limit;
+    bool was_completed;
     bool using_io;
-    int io_block_cycles; 
+    int io_block_cycles;
+    bool waiting_resource;
+    char* resource_name;
+    int total_instructions;
+    int waiting_time;
+    int turnaround_time;
+    // Adicionando completion_time
+    int completion_time;
+    int start_time; 
+    bool already_freed;
+    size_t program_size;
 } PCB;
 
-// Gerenciador de Processos
-struct ProcessManager {
-    PCB **ready_queue;
-    PCB **blocked_queue;
-    int ready_count;
-    int blocked_count;
-    int next_pid;
-    int quantum_size;
-};
+// Funções do PCB
+PCB* create_pcb(void);
+void save_context(PCB* pcb, core* current_core);
+void restore_context(PCB* pcb, core* current_core);
+void free_pcb(PCB* pcb);
 
-// Estrutura para gerenciar programas na memória
-typedef struct {
-    char* start;
-    int length;
-    int num_lines;
-} ProgramInfo;
+// Funções auxiliares
+const char* state_to_string(process_state state);
 
 // Variáveis globais
-extern PCB* all_processes[MAX_PROCESSES];
+extern PCB* all_processes[];
 extern int total_processes;
-extern ProgramInfo programs[10];
-extern int num_programs;
 
-// Function declarations
+// Funções do ProcessManager
 ProcessManager* init_process_manager(int quantum_size);
-PCB* create_process(ProcessManager* pm);
-void set_process_base_address(PCB* pcb, int base_address);
-void schedule_process(ProcessManager* pm, cpu* cpu);
 void schedule_next_process(cpu* cpu, int core_id);
-void save_context(PCB* pcb, core* core);
-void restore_context(PCB* pcb, core* core);
-bool check_program_running(cpu* cpu);
 void check_blocked_processes(cpu* cpu);
-bool check_resource_available(cpu* cpu, int address, int requesting_pid);
-void remove_from_ready_queue(ProcessManager* pm, int idx);
-void assign_to_core(cpu* cpu, PCB* process, int core_id);
 int count_ready_processes(ProcessManager* pm);
+void lock_process_manager(ProcessManager* pm);
+void unlock_process_manager(ProcessManager* pm);
 
 #endif

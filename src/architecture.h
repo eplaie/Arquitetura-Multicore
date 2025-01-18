@@ -1,7 +1,5 @@
 #ifndef ARCHITECTURE_H
 #define ARCHITECTURE_H
-#define DEFAULT_QUANTUM 4
-#define MAX_CYCLES 13
 
 #include "common_types.h"
 #include "disc.h"
@@ -10,25 +8,29 @@
 #include "pipeline.h"
 #include "cpu.h"
 #include "pcb.h"
+#include "ram.h"  // Adicionar este include
 #include "architecture_state.h"
 
+#define DEFAULT_QUANTUM 4
+#define MAX_CYCLES 5
 
-typedef struct {
-    int total_cycles;
-    int completed_processes;
-    int preempted_processes;
-    int blocked_processes;
-    int total_instructions;
-    float avg_execution_time;
-} ExecutionStats;
+// Funções principais 
+void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, 
+                      peripherals* peripherals, architecture_state* state);
 
-void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, peripherals* peripherals, architecture_state* state);
-void load_program_on_ram(ram* memory, char* program, int base_address);
-void check_instructions_on_ram(ram* memory_ram);
-void init_pipeline_multicore(architecture_state* state, cpu* cpu, ram* memory_ram);
-void execute_pipeline_cycle(architecture_state* state, cpu* cpu, ram* memory_ram, int core_id, int cycle_count);
-void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, peripherals* peripherals, architecture_state* state);
-// Mantenha apenas um parâmetro cycle_count
-void print_execution_summary(architecture_state* state, cpu* cpu,ram* memory_ram, int cycle_count);
+void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, 
+                      peripherals* peripherals, architecture_state* state);
+
+static inline void init_mutex(pthread_mutex_t* mutex) {
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(mutex, &attr);
+    pthread_mutexattr_destroy(&attr);
+}
+
+// Funções auxiliares
+void update_system_metrics(architecture_state* state);
+void check_system_state(architecture_state* state, cpu* cpu);
 
 #endif
