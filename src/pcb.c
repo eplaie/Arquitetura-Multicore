@@ -26,7 +26,7 @@ PCB* create_pcb(void) {
     pcb->base_address = 0;
     pcb->memory_limit = NUM_MEMORY;
     pcb->was_completed = false;
-    pcb->start_time = 0;  // Inicializa com 0, será definido quando o processo começar a executar
+    pcb->start_time = 0;  
 
     pcb->registers = calloc(NUM_REGISTERS, sizeof(unsigned short int));
     if (!pcb->registers) {
@@ -123,7 +123,7 @@ ProcessManager* init_process_manager(int quantum_size) {
     pm->blocked_count = 0;
     pm->quantum_size = quantum_size;
     pm->current_time = 0;
-    pm->policy = NULL;  // Será definido depois
+    pm->policy = NULL;  
 
     pthread_mutex_init(&pm->queue_mutex, NULL);
     pthread_mutex_init(&pm->resource_mutex, NULL);

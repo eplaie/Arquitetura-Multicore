@@ -9,7 +9,7 @@
 
 // Funções de leitura e análise de programa
 char* read_program(const char* filename);  
-char* get_line_of_program(char* program_start, unsigned short int line_number);  // Mudado para unsigned short int
+char* get_line_of_program(char* program_start, unsigned short int line_number); 
 unsigned short int count_tokens_in_line(char* line);
 
 #endif

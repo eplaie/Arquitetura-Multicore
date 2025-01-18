@@ -9,7 +9,7 @@
 
 #include "libs.h"
 
-// Enumeração das instruções
+//instruções
 typedef enum type_of_instruction {
     LOAD,
     STORE,
@@ -26,7 +26,7 @@ typedef enum type_of_instruction {
     INVALID,
 } type_of_instruction;
 
-// Forward declarations
+
 typedef struct PCB PCB;
 typedef struct ProcessManager ProcessManager;
 typedef struct core core;

@@ -5,8 +5,6 @@
 #include <stdbool.h>
 #include "common_types.h"
 
-
-// Forward declarations
 struct pipeline;
 struct ProcessManager;
 
@@ -27,7 +25,7 @@ typedef struct architecture_state {
     bool program_running;
     pthread_mutex_t global_mutex;
     
-    // Métricas de desempenho adicionadas
+    // Estatísticas
     int cycle_count;
     int total_instructions;
     int completed_processes;

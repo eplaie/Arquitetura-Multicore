@@ -9,8 +9,8 @@
 
 void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, 
                       peripherals* peripherals, architecture_state* state) {
-                        (void)memory_disc;     // Marca parâmetro como usado
-    (void)peripherals;     // Marca parâmetro como usado
+                        (void)memory_disc;    
+    (void)peripherals;     
     printf("\n[Init] Iniciando arquitetura");
     printf("\n[Init] Verificação inicial:");
     printf("\n - CPU: %p", (void*)cpu);
@@ -43,7 +43,7 @@ void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc,
         }
 
         args->cpu = cpu;
-        args->memory_ram = memory_ram;  // Usar a RAM original
+        args->memory_ram = memory_ram;  
         args->core_id = i;
         args->state = state;
         cpu->core[i].arch_state = state;

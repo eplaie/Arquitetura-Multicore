@@ -20,16 +20,15 @@ unsigned short int mul(cpu* cpu, const char* instruction, unsigned short int ind
 unsigned short int div_c(cpu* cpu, const char* instruction, unsigned short int index_core);
 
 // Funções de controle de fluxo
-void if_i(cpu* cpu, char* program, instruction_processor* pipe, unsigned short int index_core);  // Removido const
+void if_i(cpu* cpu, char* program, instruction_processor* pipe, unsigned short int index_core);  
 void if_end(instruction_processor* pipe);
-void else_i(cpu* cpu, char* program, instruction_processor* pipe, unsigned short int index_core);  // Removido const
+void else_i(cpu* cpu, char* program, instruction_processor* pipe, unsigned short int index_core);  
 void else_end(instruction_processor* pipe);
 void loop(cpu* cpu, instruction_processor* pipe, unsigned short int index_core);
 void loop_end(cpu* cpu, instruction_processor* pipe, unsigned short int index_core);
 
 // Funções auxiliares
-char* trim_copy(const char* str);  // Nova função que retorna uma cópia trimada
-void trim(char* str);              // Original mantida para compatibilidade
+void trim(char* str);              
 char* instruction_fetch(cpu* cpu, char* program, unsigned short int index_core);
 type_of_instruction instruction_decode(const char* instruction);
 void execute_instruction(cpu* cpu, ram* memory_ram, const char* instruction,

@@ -55,8 +55,6 @@ static void handle_process_completion(architecture_state* state, cpu* cpu,
 
 void execute_pipeline_cycle(architecture_state* state, cpu* cpu,
                          ram* memory_ram, int core_id, int cycle_count) {
-   // Removemos a verificação do memory_ram passado como parâmetro
-   // e usamos apenas o memory_ram da CPU
    if (!state || !cpu || !cpu->memory_ram || !cpu->memory_ram->vector || 
        !cpu->memory_ram->initialized) {
        printf("\n[Core %d] Erro: CPU ou RAM inválida", core_id);
@@ -221,7 +219,7 @@ if (!instruction || strlen(instruction) == 0 || current_process->PC >= current_p
 
         release_core(cpu, core_id);
 
-    //            printf("\n[Debug] Após release_core:");
+    //    printf("\n[Debug] Após release_core:");
     //    printf("\n - Ready count: %d", cpu->process_manager->ready_count);
     //    printf("\n - Core disponível: %d", current_core->is_available);
 

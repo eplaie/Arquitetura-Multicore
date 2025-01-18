@@ -7,11 +7,11 @@
 #include "policies/policy.h"
 #include "policies/policy_selector.h"
 
-// Implementação da função clean_ready_queue
+
 void clean_ready_queue(ProcessManager* pm) {
     if (!pm) return;
     
-    // Remove processos finalizados da fila de prontos
+    // Remove processos finalizados
     for (int i = 0; i < pm->ready_count; i++) {
         if (pm->ready_queue[i]->state == FINISHED) {
             // Move os processos restantes
@@ -19,7 +19,7 @@ void clean_ready_queue(ProcessManager* pm) {
                 pm->ready_queue[j] = pm->ready_queue[j + 1];
             }
             pm->ready_count--;
-            i--; // Ajusta o índice após a remoção
+            i--; 
         }
     }
 }
@@ -54,7 +54,7 @@ int main(void) {
         exit(1);
     }
 
-    // 2. Atribuir o Process Manager à CPU e ao arch_state
+    // 2. Atribuir o Process Manager 
     cpu->process_manager = pm;
     arch_state->process_manager = pm;
 
@@ -94,7 +94,7 @@ int main(void) {
             process->base_address = base_address;
             process->memory_limit = base_address + (NUM_MEMORY / MAX_PROCESSES) - 1;
             
-            load_program_on_ram(cpu, program, base_address);
+            load_program_on_ram(cpu, program, base_address, process);
             process->state = READY;
             cpu->process_manager->ready_queue[cpu->process_manager->ready_count++] = process;
             

@@ -74,10 +74,10 @@ void write_ram(ram* memory_ram, unsigned short int address, const char* data) {
     printf("\n[RAM] Escrita concluída com sucesso");
 }
 
-void load_program_on_ram(struct cpu* cpu, char* program_content, unsigned int base_address) {
+void load_program_on_ram(struct cpu* cpu, char* program_content, unsigned int base_address, PCB* pcb) {
     if (!cpu || !cpu->memory_ram || !cpu->memory_ram->vector || 
-        !cpu->memory_ram->initialized) {
-        printf("\nERRO: CPU ou RAM inválida\n");
+        !cpu->memory_ram->initialized || !pcb) {  // Adicionada verificação do pcb
+        printf("\nERRO: CPU, RAM ou PCB inválido\n");
         return;
     }
     printf("\n[RAM] Verificação antes de carregar:");
@@ -102,6 +102,8 @@ void load_program_on_ram(struct cpu* cpu, char* program_content, unsigned int ba
     printf("\n - Tamanho: %zu bytes", program_length);
     printf("\n - Endereço base: %u", base_address);
     printf("\n - Conteúdo: %s\n", program_content);
+
+    pcb->program_size = program_length;
 
     // Verifica se há espaço suficiente na memória
     if (base_address + program_length >= NUM_MEMORY) {

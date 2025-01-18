@@ -119,7 +119,7 @@ unsigned short int count_tokens_in_line(char* line) {
     return count;
 }
 
-/* Função comentada - pode ser reativada se necessário
+/* Função comentada 
 unsigned short int count_lines(char* program) {
     if (!program) return 0;
     

@@ -14,14 +14,12 @@
 #define DEFAULT_QUANTUM 4
 #define MAX_CYCLES 5
 
-// Funções principais - agora com memory_ram
+// Funções principais 
 void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, 
                       peripherals* peripherals, architecture_state* state);
 
 void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, 
                       peripherals* peripherals, architecture_state* state);
-
-void cleanup_processes(void);
 
 static inline void init_mutex(pthread_mutex_t* mutex) {
     pthread_mutexattr_t attr;

@@ -18,7 +18,7 @@ unsigned short int get_register_index(const char* reg_name) {
     }
     
     printf("Error: Invalid register name %s\n", reg_name);
-    return 0; // Retorna registrador 0 em caso de erro
+    return 0; 
 }
 
 unsigned short int ula(unsigned short int operating_a, unsigned short int operating_b, type_of_instruction operation) {
@@ -327,7 +327,6 @@ unsigned short int div_c(cpu* cpu, const char* instruction, unsigned short int i
 void if_i(cpu* cpu, char* program, instruction_processor* instr_processor, unsigned short int index_core) {
     if (!program || !instr_processor || !cpu) return;
 
-    // Declaração de variáveis no início da função
     char* program_copy = NULL;
     char* instruction_copy = NULL;
     char* token = NULL;
@@ -612,42 +611,10 @@ void loop_end(cpu* cpu, instruction_processor* instr_processor, unsigned short i
     free(instruction_copy);
 }
 
-// Função que faz trim em uma cópia
-char* trim_copy(const char* str) {
-    if (!str) return NULL;
-    
-    // Encontra o início não-whitespace
-    while (*str && isspace((unsigned char)*str)) {
-        str++;
-    }
-    
-    // Se a string é toda whitespace
-    if (!*str) {
-        return strdup("");
-    }
-    
-    // Encontra o fim não-whitespace
-    const char* end = str + strlen(str) - 1;
-    while (end > str && isspace((unsigned char)*end)) {
-        end--;
-    }
-    
-    // Aloca e copia a parte relevante
-    size_t len = end - str + 1;
-    char* result = malloc(len + 1);
-    if (!result) return NULL;
-    
-    strncpy(result, str, len);
-    result[len] = '\0';
-    
-    return result;
-}
 
-// Função original que modifica a string in-place
 void trim(char* str) {
     if (!str) return;
 
-    // Remove espaços iniciais
     char* start = str;
     while (*start && isspace((unsigned char)*start)) {
         start++;
@@ -657,7 +624,6 @@ void trim(char* str) {
         memmove(str, start, strlen(start) + 1);
     }
 
-    // Remove espaços finais
     char* end = str + strlen(str);
     while (end > str && isspace((unsigned char)*(end - 1))) {
         end--;
@@ -668,13 +634,13 @@ void trim(char* str) {
 char* instruction_fetch(cpu* cpu, char* program, unsigned short int index_core) {
     if (!program || !cpu) return NULL;
 
-    // Esta função deve retornar a próxima instrução do programa
+    
     char* current_instruction = NULL;
     
-    // Usa a função get_line_of_program com os tipos corretos
+    
     current_instruction = get_line_of_program(
         program + cpu->core[index_core].PC, 
-        0  // linha 0 pois já estamos no offset correto
+        0  
     );
 
     return current_instruction;

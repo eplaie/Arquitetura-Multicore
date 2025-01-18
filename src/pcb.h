@@ -52,6 +52,7 @@ typedef struct PCB {
     int completion_time;
     int start_time; 
     bool already_freed;
+    size_t program_size;
 } PCB;
 
 // Funções do PCB

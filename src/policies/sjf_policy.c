@@ -15,13 +15,12 @@ int get_program_length(PCB* process) {
 PCB* sjf_select_next(ProcessManager* pm) {
     if (!pm || pm->ready_count == 0) return NULL;
     
-    // Encontra processo com menor tamanho
     int shortest_idx = 0;
-    int shortest_size = pm->ready_queue[0]->memory_limit - pm->ready_queue[0]->base_address;
+    int shortest_size = pm->ready_queue[0]->program_size;
     
     printf("\n[SJF] Analisando processos:");
     for (int i = 0; i < pm->ready_count; i++) {
-        int size = pm->ready_queue[i]->memory_limit - pm->ready_queue[i]->base_address;
+        int size = pm->ready_queue[i]->program_size;
         printf("\n - P%d: %d bytes", pm->ready_queue[i]->pid, size);
         
         if (size < shortest_size) {

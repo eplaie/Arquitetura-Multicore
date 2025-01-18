@@ -40,9 +40,6 @@ void cleanup_pipeline(pipeline* p);
 // Funções de estágio do pipelin
 void handle_memory_stage(type_of_instruction type);
 void handle_writeback_stage(type_of_instruction type);
-void update_process_state(struct architecture_state* state, struct PCB* current_process,
-                         struct core* current_core, struct cpu* cpu, 
-                         int core_id, int cycle_count);
 
 // Funções auxiliares
 type_of_instruction decode_instruction(const char* instruction);
@@ -51,7 +48,6 @@ const char* get_instruction_name(type_of_instruction type);
 // Funções de sincronização
 void lock_pipeline_stage(pipeline_stage* stage);
 void unlock_pipeline_stage(pipeline_stage* stage);
-void lock_pipeline(pipeline* p);
-void unlock_pipeline(pipeline* p);
+
 
 #endif
