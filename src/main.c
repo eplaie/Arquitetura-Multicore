@@ -55,8 +55,11 @@ int main(void) {
     }
 
     // 2. Atribuir o Process Manager 
+    pm->cpu = cpu;
     cpu->process_manager = pm;
     arch_state->process_manager = pm;
+
+    init_cache();
 
     // 3. Inicialização da arquitetura
     init_architecture(cpu, memory_ram, memory_disc, p, arch_state);

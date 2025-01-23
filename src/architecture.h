@@ -8,7 +8,7 @@
 #include "pipeline.h"
 #include "cpu.h"
 #include "pcb.h"
-#include "ram.h"  // Adicionar este include
+#include "ram.h"  
 #include "architecture_state.h"
 
 #define DEFAULT_QUANTUM 4

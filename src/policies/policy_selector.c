@@ -18,6 +18,9 @@ Policy* select_scheduling_policy(void) {
         case 3:
             policy = create_lottery_policy();
             break;
+        case 4:  // Add this case
+            policy = create_cache_aware_policy();
+            break;
         default:
             printf("\n[Política] ERRO: Opção inválida");
             exit(1);

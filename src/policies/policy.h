@@ -7,7 +7,8 @@
     typedef enum {
         POLICY_RR,      
         POLICY_SJF,       
-        POLICY_LOTTERY  
+        POLICY_LOTTERY, 
+        POLICY_CACHE_AWARE
     } PolicyType;
 
     // Interface da política de escalonamento
@@ -24,6 +25,9 @@
     Policy* create_rr_policy(void);
     Policy* create_sjf_policy(void);
     Policy* create_lottery_policy(void);
+    Policy* create_cache_aware_policy(void);
     int get_program_length(PCB* process);
+    void rr_on_quantum_expired(ProcessManager* pm, PCB* process);
+    void rr_on_process_complete(ProcessManager* pm, PCB* process);
 
     #endif

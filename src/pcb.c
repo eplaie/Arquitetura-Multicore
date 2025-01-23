@@ -109,7 +109,7 @@ ProcessManager* init_process_manager(int quantum_size) {
 
     // printf("\n[Debug] Inicializando Process Manager");
     // printf("\n - Endereço: %p", (void*)pm);
-
+    
     pm->ready_queue = malloc(sizeof(PCB*) * MAX_PROCESSES);
     pm->blocked_queue = malloc(sizeof(PCB*) * MAX_PROCESSES);
 
@@ -134,41 +134,47 @@ ProcessManager* init_process_manager(int quantum_size) {
 }
 
 void schedule_next_process(cpu* cpu, int core_id) {
-    if (!cpu || !cpu->process_manager) return;
+   if (!cpu || !cpu->process_manager) return;
 
-    ProcessManager* pm = cpu->process_manager;
-    lock_process_manager(pm);
+   ProcessManager* pm = cpu->process_manager;
+   lock_process_manager(pm);
 
-    // printf("\n[Debug] Tentando escalonar processo para core %d", core_id);
-    printf("\n - Processos prontos: %d", pm->ready_count);
+   // Debug only for cache-aware policy
+   if (pm->policy->type == POLICY_CACHE_AWARE) {
+       printf("\n[Debug] Core %d scheduling (Ready: %d)", core_id, pm->ready_count);
+       printf("\n - Core %d available: %d", core_id, cpu->core[core_id].is_available);
+       printf("\n[Debug] About to call select_next");
+   }
 
-    if (pm->ready_count > 0) {
-        PCB* next_process = pm->policy->select_next(pm);
-        if (next_process) {
-            if (next_process->start_time == 0) {
-                next_process->start_time = pm->current_time;
-            }
-            
-            // Resetar quantum e estado do core
-            cpu->core[core_id].quantum_remaining = pm->quantum_size;
-            cpu->core[core_id].is_available = false;
-            cpu->core[core_id].current_process = next_process;
-            cpu->core[core_id].PC = next_process->PC;
-            
-            next_process->state = RUNNING;
-            next_process->core_id = core_id;
-            
-            restore_context(next_process, &cpu->core[core_id]);
-            show_process_state(next_process->pid, "READY", "RUNNING");
-            
-            printf("\n[Debug] Processo %d escalonado para core %d", 
+   if (pm->ready_count > 0) {
+       PCB* next_process = pm->policy->select_next(pm);
+       if (next_process) {
+           if (next_process->start_time == 0) {
+               next_process->start_time = pm->current_time;
+           }
+           
+           // Resetar quantum e estado do core
+           cpu->core[core_id].quantum_remaining = pm->quantum_size;
+           cpu->core[core_id].is_available = false;
+           cpu->core[core_id].current_process = next_process;
+           cpu->core[core_id].PC = next_process->PC;
+           
+           next_process->state = RUNNING;
+           next_process->core_id = core_id;
+           
+           restore_context(next_process, &cpu->core[core_id]);
+           show_process_state(next_process->pid, "READY", "RUNNING");
+           
+           if (pm->policy->type == POLICY_CACHE_AWARE) {
+               printf("\n[Cache Debug] Process %d scheduled on core %d", 
                    next_process->pid, core_id);
-            printf("\n - PC: %d", next_process->PC);
-            printf("\n - Quantum: %d", cpu->core[core_id].quantum_remaining);
-        }
-    }
+               printf("\n - PC: %d", next_process->PC);
+               printf("\n - Quantum: %d", cpu->core[core_id].quantum_remaining);
+           }
+       }
+   }
 
-    unlock_process_manager(pm);
+   unlock_process_manager(pm);
 }
 
 void check_blocked_processes(cpu* cpu) {

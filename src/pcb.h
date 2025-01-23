@@ -24,10 +24,11 @@ typedef struct ProcessManager {
     int blocked_count;
     int quantum_size;
     int current_time;
+    struct Policy* policy;
+    struct cpu* cpu;  
     pthread_mutex_t queue_mutex;
     pthread_mutex_t resource_mutex;
     pthread_cond_t resource_condition;
-    struct Policy* policy;  // Mudando para usar a forward declaration
 } ProcessManager;
 
 typedef struct PCB {
