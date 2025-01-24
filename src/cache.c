@@ -57,30 +57,6 @@ void update_metrics(CacheEntry* entry, bool is_hit) {
           entry->hit_ratio * 100, entry->hits, entry->misses);
 }
 
-float calculate_cache_score(PCB* process, ProcessManager* pm) {
-    CacheEntry* entry = &cache[process->base_address % CACHE_SIZE];
-    
-    // Calcular métricas
-    float temporal = analyze_temporal_locality(entry);
-    float spatial = analyze_spatial_locality(process, pm);
-    float pattern = analyze_instruction_pattern(get_program_content(process, pm->cpu->memory_ram));
-    float score = temporal * 0.35 + spatial * 0.35 + pattern * 0.20 + 
-                  (process->waiting_time / 1000.0) * 0.10;
-
-    // Exibir métricas detalhadas
-    printf("\n[Cache] Analisando P%d", process->pid);
-    printf("\n - Temporal: %.2f (Último acesso: %lds atrás)", temporal, 
-           time(NULL) - entry->last_access);
-    printf("\n - Espacial: %.2f", spatial);
-    printf("\n - Pattern: %.2f", pattern);
-    printf("\n - Hits/Misses: %d/%d (%.1f%%)", entry->hits, entry->misses,
-           (entry->hits + entry->misses > 0) ? 
-           (entry->hits * 100.0f) / (entry->hits + entry->misses) : 0.0f);
-    printf("\n - Score Final: %.2f\n", score);
-
-    return score;
-}
-
 void init_cache() {
    for(int i = 0; i < CACHE_SIZE; i++) {
        cache[i].tag = 0;

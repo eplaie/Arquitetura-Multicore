@@ -31,6 +31,10 @@ PCB* create_pcb(void) {
     pcb->was_completed = false;
     pcb->start_time = 0;  
     pcb->lottery_selections = 0;
+    pcb->waiting_time = 0;
+    pcb->response_time = -1; // -1 indica que ainda não começou execução
+    pcb->turnaround_time = 0;
+    pcb->last_scheduled = 0;
 
     pcb->registers = calloc(NUM_REGISTERS, sizeof(unsigned short int));
     if (!pcb->registers) {
@@ -167,6 +171,10 @@ void schedule_next_process(cpu* cpu, int core_id) {
           if (next_process->start_time == 0) {
               next_process->start_time = pm->current_time;
           }
+
+            if (next_process->response_time == -1) {
+        next_process->response_time = pm->current_time;
+    }
           
           cpu->core[core_id].quantum_remaining = pm->quantum_size;
           cpu->core[core_id].is_available = false;
@@ -175,6 +183,9 @@ void schedule_next_process(cpu* cpu, int core_id) {
           
           next_process->state = RUNNING;
           next_process->core_id = core_id;
+
+          next_process->waiting_time += (pm->current_time - next_process->last_scheduled);
+          next_process->last_scheduled = pm->current_time;
           
           restore_context(next_process, &cpu->core[core_id]);
           show_process_state(next_process->pid, "READY", "RUNNING");

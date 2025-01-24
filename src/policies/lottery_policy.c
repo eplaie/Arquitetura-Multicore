@@ -69,10 +69,8 @@ void lottery_on_quantum_expired(ProcessManager* pm, PCB* process) {
 
 void lottery_on_process_complete(ProcessManager* pm, PCB* process) {
     if (!pm || !process) return;
-    
+    process->turnaround_time = pm->current_time - process->start_time;
     process->state = FINISHED;
-    process->was_completed = true;
-    process->completion_time = process->cycles_executed;
 }
 
 Policy* create_lottery_policy() {

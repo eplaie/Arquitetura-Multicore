@@ -7,6 +7,7 @@
 
 #define CACHE_SIZE 128
 #define MAX_PATTERNS 10
+#define MISS_PENALTY 10
 
 #define MAX_PATTERN_LENGTH 32
 
@@ -34,12 +35,8 @@ typedef struct {
 void init_cache();
 bool check_cache(unsigned int address);
 void update_cache(unsigned int address, char* data);
-// void update_cache_stats(unsigned int address, bool is_hit);
-// float calculate_similarity(PCB* p1, PCB* p2, ram* memory_ram);
 float get_cache_benefit(PCB* process);
-float calculate_cache_score(PCB* process, ProcessManager* pm);
 char* get_program_content(PCB* pcb, ram* memory_ram);
-// void analyze_access_pattern(PCB* process, CacheEntry* entry);
 float analyze_temporal_locality(CacheEntry* entry);
 float analyze_spatial_locality(PCB* process, ProcessManager* pm);
 float analyze_instruction_pattern(char* content);

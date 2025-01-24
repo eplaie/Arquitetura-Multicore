@@ -132,28 +132,75 @@ void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc,
                      int cycle_count) {
    printf("\n═══════════ Métricas Finais ═══════════");
 
-       printf("\nDebug - Process Manager: %p", state->process_manager);
+    //    printf("\nDebug - Process Manager: %p", state->process_manager);
     if (state->process_manager) {
-        printf("\nDebug - Policy: %p", state->process_manager->policy);
+        // printf("\nDebug - Policy: %p", state->process_manager->policy);
         if (state->process_manager->policy) {
-            printf("\nDebug - Policy Type: %d", state->process_manager->policy->type);
+            // printf("\nDebug - Policy Type: %d", state->process_manager->policy->type);
         }
     }
    
    if (state && state->process_manager && state->process_manager->policy) {
        switch(state->process_manager->policy->type) {
-           case POLICY_CACHE_AWARE:
-               printf("\nDesempenho de Cache:");
-               for(int i = 0; i < total_processes; i++) {
-                   if (all_processes[i]) {
-                       int idx = all_processes[i]->base_address % CACHE_SIZE;
-                       printf("\n - P%d: %d hits, %d misses (%.1f%% hit ratio)", 
-                           i, cache[idx].hits, cache[idx].misses, 
-                           (cache[idx].hits + cache[idx].misses) > 0 ? 
-                           (float)cache[idx].hits / (cache[idx].hits + cache[idx].misses) * 100 : 0.0);
-                   }
-               }
-               break;
+            case POLICY_CACHE_AWARE:
+            printf("\nDesempenho de Cache:");
+            {
+                long total_hits = 0, total_misses = 0;
+                float avg_hit_ratio = 0.0;
+                
+                for(int i = 0; i < total_processes; i++) {
+                    if (all_processes[i]) {
+                        int idx = all_processes[i]->base_address % CACHE_SIZE;
+                        total_hits += cache[idx].hits;
+                        total_misses += cache[idx].misses;
+                        float hit_ratio = (cache[idx].hits + cache[idx].misses) > 0 ? 
+                            (float)cache[idx].hits / (cache[idx].hits + cache[idx].misses) * 100 : 0.0;
+                            
+                        printf("\n - P%d: %d hits, %d misses (%.1f%% hit ratio)", 
+                            i, cache[idx].hits, cache[idx].misses, hit_ratio);
+                        printf("\n   * Acessos totais: %d", cache[idx].hits + cache[idx].misses);
+                        printf("\n   * Eficiência: %.1f%%", (hit_ratio * cache[idx].hits * 100) / 
+                            (hit_ratio * cache[idx].hits + MISS_PENALTY * cache[idx].misses));
+                    }
+                }
+
+                avg_hit_ratio = (total_hits + total_misses) > 0 ? 
+                    (float)total_hits / (total_hits + total_misses) * 100 : 0.0;
+
+                printf("\n\nEstatísticas Globais da Cache:");
+                printf("\n - Total hits: %ld", total_hits);
+                printf("\n - Total misses: %ld", total_misses);
+                printf("\n - Hit ratio médio: %.1f%%", avg_hit_ratio);
+                // printf("\n - Ciclos perdidos em misses: %ld", total_misses * MISS_PENALTY);
+                printf("\n - Penalidade média por processo: %.1f ciclos", 
+                    (float)(total_misses * MISS_PENALTY) / total_processes);
+
+                    float cache_throughput = (total_hits + total_misses) / (float)cycle_count;
+                    printf("\n - Cache throughput: %.2f acessos/ciclo", cache_throughput);
+
+                float total_efficiency = 0;
+                        for(int i = 0; i < total_processes; i++) {
+                            if (all_processes[i]) {
+                                int idx = all_processes[i]->base_address % CACHE_SIZE;
+                                float process_ratio = (float)cache[idx].hits / (cache[idx].hits + cache[idx].misses);
+                                total_efficiency += process_ratio;
+                            }
+                        }
+                        printf("\n - Eficiência média: %.1f%%", (total_efficiency / total_processes) * 100);
+                                    }
+
+                                    printf("\n - Regiões mais acessadas:");
+                    for(int i = 0; i < CACHE_SIZE; i++) {
+                        if(cache[i].hits + cache[i].misses > 0) {
+                            printf("\n   * Endereço %d: %d acessos (H:%d/M:%d) - %.1f%% eficiência", 
+                                i, 
+                                cache[i].hits + cache[i].misses,
+                                cache[i].hits,
+                                cache[i].misses,
+                                (float)cache[i].hits/(cache[i].hits + cache[i].misses) * 100);
+                        }
+                    }
+            break;
                
            case POLICY_SJF:
                printf("\nMétricas SJF:");
@@ -167,14 +214,25 @@ void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc,
                break;
                
            case POLICY_LOTTERY:
-               printf("\nMétricas Lottery:");
-               for(int i = 0; i < total_processes; i++) {
-                   if (all_processes[i]) {
-                       printf("\n - P%d: Execuções sorteadas: %d", 
-                          i, all_processes[i]->lottery_selections);
-                   }
-               }
-               break;
+    printf("\nMétricas Lottery:");
+    
+    float avg_waiting = 0, avg_response = 0, avg_turnaround = 0;
+    int completed = 0;
+    
+    for(int i = 0; i < total_processes; i++) {
+        if (all_processes[i]) {
+            avg_waiting += all_processes[i]->waiting_time;
+            avg_response += all_processes[i]->response_time;
+            avg_turnaround += all_processes[i]->turnaround_time;
+            completed++;
+        }
+    }
+    
+    printf("\nTempos Médios:");
+    printf("\n - Espera: %.2f ciclos", avg_waiting/completed);
+    printf("\n - Resposta: %.2f ciclos", avg_response/completed); 
+    printf("\n - Turnaround: %.2f ciclos", avg_turnaround/completed);
+    break;
                
            case POLICY_RR:
                printf("\nMétricas Round Robin:");

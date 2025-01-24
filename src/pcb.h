@@ -47,14 +47,16 @@ typedef struct PCB {
     bool waiting_resource;
     char* resource_name;
     int total_instructions;
-    int waiting_time;
-    int turnaround_time;
     int lottery_selections;
+    int last_scheduled;
     // Adicionando completion_time
     int completion_time;
     int start_time; 
     bool already_freed;
     size_t program_size;
+    int waiting_time;      // Tempo total na fila de prontos
+    int response_time;     // Tempo até primeira execução
+    int turnaround_time;   // Tempo total no sistema
 } PCB;
 
 // Funções do PCB
