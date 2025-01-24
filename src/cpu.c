@@ -110,7 +110,7 @@ void cleanup_cpu_threads(cpu* cpu) {
         return;
     }
     
-    printf("\n[Cleanup] Iniciando limpeza dos cores");
+    // printf("\n[Cleanup] Iniciando limpeza dos cores");
     
     // Primeiro, sinalize para todas as threads pararem
     for (int i = 0; i < NUM_CORES; i++) {

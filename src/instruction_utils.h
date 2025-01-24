@@ -28,7 +28,8 @@ void loop(cpu* cpu, instruction_processor* pipe, unsigned short int index_core);
 void loop_end(cpu* cpu, instruction_processor* pipe, unsigned short int index_core);
 
 // Funções auxiliares
-void trim(char* str);              
+void trim(char* str);     
+void normalize_indentation(char* str);         
 char* instruction_fetch(cpu* cpu, char* program, unsigned short int index_core);
 type_of_instruction instruction_decode(const char* instruction);
 void execute_instruction(cpu* cpu, ram* memory_ram, const char* instruction,

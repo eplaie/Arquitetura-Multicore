@@ -36,7 +36,7 @@ static int count_total_tickets(ProcessManager* pm) {
         current_sum += (pm->ready_queue[i]->pid + 1);  // tickets do processo
         if (current_sum > winning_ticket) {
             PCB* winner = pm->ready_queue[i];
-            
+                winner->lottery_selections++;
             // Remove da fila
             for (int j = i; j < pm->ready_count - 1; j++) {
                 pm->ready_queue[j] = pm->ready_queue[j + 1];

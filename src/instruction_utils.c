@@ -611,24 +611,63 @@ void loop_end(cpu* cpu, instruction_processor* instr_processor, unsigned short i
     free(instruction_copy);
 }
 
-
-void trim(char* str) {
+void remove_indentation(char* str) {
     if (!str) return;
-
-    char* start = str;
-    while (*start && isspace((unsigned char)*start)) {
-        start++;
-    }
     
+    // Remove espaços e tabs no início
+    char* start = str;
+    while (isspace(*start)) start++;
+    
+    // Se houver indentação, move o resto da string
     if (start != str) {
         memmove(str, start, strlen(start) + 1);
     }
+}
 
-    char* end = str + strlen(str);
-    while (end > str && isspace((unsigned char)*(end - 1))) {
+
+void trim(char* str) {
+    if (!str) return;
+    
+    // Preserva indentação
+    int spaces = 0;
+    while (str[spaces] == ' ') spaces++;
+    
+    // Remove espaços extras no início
+    if (spaces > 2) {
+        memmove(str, str + (spaces - 2), strlen(str) - spaces + 3);
+    }
+    
+    // Remove espaços no final
+    int end = strlen(str) - 1;
+    while (end > 0 && isspace(str[end])) {
+        str[end] = '\0';
         end--;
     }
-    *end = '\0';
+}
+
+void normalize_indentation(char* str) {
+    if (!str) return;
+    
+    // Contar espaços iniciais
+    int spaces = 0;
+    char* p = str;
+    while (*p == ' ') {
+        spaces++;
+        p++;
+    }
+
+    // Se tem indentação (2 espaços = 1 nível)
+    if (spaces >= 2) {
+        // Preservar apenas 2 espaços para cada nível
+        int levels = spaces / 2;
+        int preserved = levels * 2;
+        memmove(str + preserved, str + spaces, strlen(str + spaces) + 1);
+        
+        // Preencher com espaços preservados
+        for (int i = 0; i < preserved; i++) {
+            str[i] = ' ';
+        }
+    }
 }
 
 char* instruction_fetch(cpu* cpu, char* program, unsigned short int index_core) {
@@ -652,6 +691,9 @@ type_of_instruction instruction_decode(const char* instruction) {
         printf("\n[Decode] Erro: Instrução nula");
         return INVALID;
     }
+
+    char* cleaned = strdup(instruction);
+    remove_indentation(cleaned);
 
     printf("\n[Decode] Decodificando: %s", instruction);
 
@@ -685,6 +727,9 @@ void execute_instruction(cpu* cpu, ram* memory_ram, const char* instruction,
         printf("\nERRO: Parâmetros inválidos em execute_instruction");
         return;
     }
+
+    char* normalized = strdup(instruction);
+    normalize_indentation(normalized);  
 
     switch (type) {
         case LOAD:

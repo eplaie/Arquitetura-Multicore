@@ -49,6 +49,7 @@ typedef struct PCB {
     int total_instructions;
     int waiting_time;
     int turnaround_time;
+    int lottery_selections;
     // Adicionando completion_time
     int completion_time;
     int start_time; 

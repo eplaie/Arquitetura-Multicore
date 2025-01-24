@@ -4,44 +4,28 @@
 #include "../os_display.h"  
 
 
-PCB* cache_aware_select_next(ProcessManager* pm) {
-    printf("\n[Cache] Iniciando seleção de processo");
-    
+    PCB* cache_aware_select_next(ProcessManager* pm) {
     if (!pm || pm->ready_count == 0 || !pm->cpu || !pm->cpu->memory_ram) return NULL;
-
+    
     int core_id = -1;
     for(int i = 0; i < NUM_CORES; i++) {
         if(pm->cpu->core[i].is_available) {
             core_id = i;
-            printf("\n[Cache] Core %d disponível", i);
             break;
         }
     }
-    
     if(core_id == -1) return NULL;
 
-    // Selecionar processo baseado em similaridade
     PCB* selected = NULL;
     float best_score = -1;
     int best_idx = 0;
 
-    for(int i = 0; i < pm->ready_count && pm->ready_queue[i]; i++) {
+    // Simplificar cálculo de score temporariamente para debug
+    for(int i = 0; i < pm->ready_count; i++) {
         float score = 0.0f;
-        
-        // Verificar instruções similares em cache
-        for(int j = 0; j < NUM_CORES; j++) {
-            if(!pm->cpu->core[j].is_available && 
-               pm->cpu->core[j].current_process) {
-                score += 0.3f;  // Bônus por similaridade
-            }
-        }
-        
-        // Adicionar bônus de cache se processo já usado antes
         if(check_cache(pm->ready_queue[i]->base_address)) {
             score += 0.7f;
         }
-
-        printf("\n[Cache] P%d score: %.2f", pm->ready_queue[i]->pid, score);
         
         if(score > best_score) {
             best_score = score;

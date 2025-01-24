@@ -202,7 +202,7 @@ for (int core_id = 0; core_id < NUM_CORES; core_id++) {
 
     // Limpeza final
     printf("[Sistema] Liberando recursos\n");
-    free_architecture(cpu, memory_ram, memory_disc, p, arch_state);
+    free_architecture(cpu, memory_ram, memory_disc, p, arch_state, cycle_count);
 
     printf("[Sistema] Execução finalizada\n");
     return 0;

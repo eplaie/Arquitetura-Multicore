@@ -6,84 +6,82 @@
 #include "peripherals.h"
 #include "pcb.h"
 #include "pipeline.h"
+#include "cache.h"
+extern CacheEntry cache[];
 
 void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, 
-                      peripherals* peripherals, architecture_state* state) {
-                        (void)memory_disc;    
-    (void)peripherals;     
-    printf("\n[Init] Iniciando arquitetura");
-    printf("\n[Init] Verificação inicial:");
-    printf("\n - CPU: %p", (void*)cpu);
-    printf("\n - RAM: %p", (void*)memory_ram);
-    printf("\n - RAM vector: %p", (void*)(memory_ram ? memory_ram->vector : NULL));
+                     peripherals* peripherals, architecture_state* state) {
+   (void)memory_disc;    
+   (void)peripherals;     
+   printf("\n[Init] Iniciando arquitetura");
+   printf("\n[Init] Verificação inicial:");
+   printf("\n - CPU: %p", (void*)cpu);
+   printf("\n - RAM: %p", (void*)memory_ram);
+   printf("\n - RAM vector: %p", (void*)(memory_ram ? memory_ram->vector : NULL));
 
-    if (!cpu || !memory_ram || !memory_ram->vector) {
-        printf("\n[Init] ERRO: Ponteiro NULL detectado");
-        printf("\n - CPU: %p", (void*)cpu);
-        printf("\n - RAM: %p", (void*)memory_ram);
-        printf("\n - RAM vector: %p", (void*)(memory_ram ? memory_ram->vector : NULL));
-        exit(1);
-    }
+   if (!cpu || !memory_ram || !memory_ram->vector) {
+       printf("\n[Init] ERRO: Ponteiro NULL detectado");
+       printf("\n - CPU: %p", (void*)cpu);
+       printf("\n - RAM: %p", (void*)memory_ram);
+       printf("\n - RAM vector: %p", (void*)(memory_ram ? memory_ram->vector : NULL));
+       exit(1);
+   }
 
-    // Inicializa CPU
-    init_cpu(cpu, memory_ram);
+   init_cpu(cpu, memory_ram);
 
-    printf("\n[Init] Verificação após init_cpu:");
-    printf("\n - RAM: %p", (void*)memory_ram);
-    printf("\n - RAM vector: %p", (void*)memory_ram->vector);
-    printf("\n - CPU memory_ram: %p", (void*)cpu->memory_ram);
-    printf("\n - CPU memory_ram vector: %p", (void*)(cpu->memory_ram ? cpu->memory_ram->vector : NULL));
+   printf("\n[Init] Verificação após init_cpu:");
+   printf("\n - RAM: %p", (void*)memory_ram);
+   printf("\n - RAM vector: %p", (void*)memory_ram->vector);
+   printf("\n - CPU memory_ram: %p", (void*)cpu->memory_ram);
+   printf("\n - CPU memory_ram vector: %p", (void*)(cpu->memory_ram ? cpu->memory_ram->vector : NULL));
 
-     printf("\n[Init] Criando threads dos cores");
-    for (int i = 0; i < NUM_CORES; i++) {
-        core_thread_args* args = malloc(sizeof(core_thread_args));
-        if (!args) {
-            printf("\n[Init] ERRO: Falha na alocação dos argumentos da thread %d", i);
-            exit(1);
-        }
+   printf("\n[Init] Criando threads dos cores");
+   for (int i = 0; i < NUM_CORES; i++) {
+       core_thread_args* args = malloc(sizeof(core_thread_args));
+       if (!args) {
+           printf("\n[Init] ERRO: Falha na alocação dos argumentos da thread %d", i);
+           exit(1);
+       }
 
-        args->cpu = cpu;
-        args->memory_ram = memory_ram;  
-        args->core_id = i;
-        args->state = state;
-        cpu->core[i].arch_state = state;
+       args->cpu = cpu;
+       args->memory_ram = memory_ram;  
+       args->core_id = i;
+       args->state = state;
+       cpu->core[i].arch_state = state;
 
-        // Verificar argumentos antes de criar thread
-        printf("\n[Debug] Argumentos da thread %d:", i);
-        printf("\n - RAM: %p", (void*)args->memory_ram);
-        printf("\n - RAM vector: %p", (void*)args->memory_ram->vector);
-        
-        if (pthread_create(&cpu->core[i].thread, NULL, core_execution_thread, args) != 0) {
-            printf("\n[Init] ERRO: Falha na criação da thread do core %d", i);
-            exit(1);
-        }
+       printf("\n[Debug] Argumentos da thread %d:", i);
+       printf("\n - RAM: %p", (void*)args->memory_ram);
+       printf("\n - RAM vector: %p", (void*)args->memory_ram->vector);
+       
+       if (pthread_create(&cpu->core[i].thread, NULL, core_execution_thread, args) != 0) {
+           printf("\n[Init] ERRO: Falha na criação da thread do core %d", i);
+           exit(1);
+       }
 
-        printf("\n[Init] Thread do core %d criada com sucesso", i);
-    }
+       printf("\n[Init] Thread do core %d criada com sucesso", i);
+   }
 
-        state->pipeline = malloc(sizeof(pipeline));
-    if (!state->pipeline) {
-        printf("\n[Init] ERRO: Falha na alocação do pipeline");
-        exit(1);
-    }
-    init_pipeline(state->pipeline);
+   state->pipeline = malloc(sizeof(pipeline));
+   if (!state->pipeline) {
+       printf("\n[Init] ERRO: Falha na alocação do pipeline");
+       exit(1);
+   }
+   init_pipeline(state->pipeline);
 
-    // Inicializa métricas e estado global
-    state->program_running = true;
-    state->cycle_count = 0;
-    state->total_instructions = 0;
-    state->completed_processes = 0;
-    state->blocked_processes = 0;
-    state->context_switches = 0;
-    state->avg_turnaround = 0;
-    state->process_manager = NULL; 
+   // Inicializa métricas e estado global 
+   state->program_running = true;
+   state->cycle_count = 0;
+   state->total_instructions = 0;
+   state->completed_processes = 0;
+   state->blocked_processes = 0;
+   state->context_switches = 0;
+   state->avg_turnaround = 0;
 
-    pthread_mutex_init(&state->global_mutex, NULL);
+   pthread_mutex_init(&state->global_mutex, NULL);
 
-    printf("\n[Init] Arquitetura inicializada com sucesso");
-    printf("\n - Cores ativos: %d", NUM_CORES);
-    printf("\n - Quantum: %d", DEFAULT_QUANTUM);
-    // printf("\n - RAM final: %p", (void*)cpu->memory_ram->vector);
+   printf("\n[Init] Arquitetura inicializada com sucesso");
+   printf("\n - Cores ativos: %d", NUM_CORES);
+   printf("\n - Quantum: %d", DEFAULT_QUANTUM);
 }
 
 void update_system_metrics(architecture_state* state) {
@@ -129,40 +127,109 @@ void check_system_state(architecture_state* state, cpu* cpu) {
     show_scheduler_state(ready, blocked);
 }
 
-void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, 
-                      peripherals* peripherals, architecture_state* state) {
-    cleanup_cpu_threads(cpu);
-    
+void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc,
+                     peripherals* peripherals, architecture_state* state,
+                     int cycle_count) {
+   printf("\n═══════════ Métricas Finais ═══════════");
 
-    if (memory_ram) {
-        free(memory_ram->vector);
-        free(memory_ram);
-    }
-
+       printf("\nDebug - Process Manager: %p", state->process_manager);
     if (state->process_manager) {
-        free(state->process_manager->ready_queue);
-        free(state->process_manager->blocked_queue);
-        free(state->process_manager);
-    }
-
-    if (state->pipeline) {
-        free(state->pipeline);
-    }
-
-    if (memory_disc) {
-        free(memory_disc);
-    }
-    if (peripherals) {
-        free(peripherals);
-    }
-
-    pthread_mutex_destroy(&state->global_mutex);
-
-    free(state);
-
-    for (int i = 0; i < total_processes; i++) {
-        if (all_processes[i]) {
-            free_pcb(all_processes[i]);
+        printf("\nDebug - Policy: %p", state->process_manager->policy);
+        if (state->process_manager->policy) {
+            printf("\nDebug - Policy Type: %d", state->process_manager->policy->type);
         }
     }
+   
+   if (state && state->process_manager && state->process_manager->policy) {
+       switch(state->process_manager->policy->type) {
+           case POLICY_CACHE_AWARE:
+               printf("\nDesempenho de Cache:");
+               for(int i = 0; i < total_processes; i++) {
+                   if (all_processes[i]) {
+                       int idx = all_processes[i]->base_address % CACHE_SIZE;
+                       printf("\n - P%d: %d hits, %d misses (%.1f%% hit ratio)", 
+                           i, cache[idx].hits, cache[idx].misses, 
+                           (cache[idx].hits + cache[idx].misses) > 0 ? 
+                           (float)cache[idx].hits / (cache[idx].hits + cache[idx].misses) * 100 : 0.0);
+                   }
+               }
+               break;
+               
+           case POLICY_SJF:
+               printf("\nMétricas SJF:");
+               for(int i = 0; i < total_processes; i++) {
+                   if (all_processes[i]) {
+                       printf("\n - P%d: Tamanho %zu bytes, Tempo execução %d ciclos", 
+                           i, all_processes[i]->program_size,
+                           all_processes[i]->cycles_executed);
+                   }
+               }
+               break;
+               
+           case POLICY_LOTTERY:
+               printf("\nMétricas Lottery:");
+               for(int i = 0; i < total_processes; i++) {
+                   if (all_processes[i]) {
+                       printf("\n - P%d: Execuções sorteadas: %d", 
+                          i, all_processes[i]->lottery_selections);
+                   }
+               }
+               break;
+               
+           case POLICY_RR:
+               printf("\nMétricas Round Robin:");
+               for(int i = 0; i < total_processes; i++) {
+                   if (all_processes[i]) {
+                       printf("\n - P%d: Preempções: %d", 
+                           i, all_processes[i]->cycles_executed / DEFAULT_QUANTUM);
+                   }
+               }
+               break;
+       }
+   }
+
+   printf("\n\nExecução:");
+   printf("\n - Ciclos totais: %d", cycle_count);
+   printf("\n - Instruções totais: %d", state->total_instructions);
+   printf("\n - IPC médio: %.2f", (float)state->total_instructions / cycle_count);
+   printf("\n - Trocas de contexto: %d", state->context_switches);
+
+   printf("\n\nUtilização:");
+   printf("\n - Ocupação dos cores: %.1f%%", 
+          (float)(state->total_instructions * 100) / (cycle_count * NUM_CORES));
+   printf("\n═════════════════════════════════════\n");
+
+   cleanup_cpu_threads(cpu);
+
+   if (memory_ram) {
+       free(memory_ram->vector);
+       free(memory_ram);
+   }
+
+   if (state->process_manager) {
+       free(state->process_manager->ready_queue);
+       free(state->process_manager->blocked_queue);
+       free(state->process_manager);
+   }
+
+   if (state->pipeline) {
+       free(state->pipeline);
+   }
+
+   if (memory_disc) {
+       free(memory_disc);
+   }
+   if (peripherals) {
+       free(peripherals);
+   }
+
+   pthread_mutex_destroy(&state->global_mutex);
+
+   free(state);
+
+   for (int i = 0; i < total_processes; i++) {
+       if (all_processes[i]) {
+           free_pcb(all_processes[i]);
+       }
+   }
 }

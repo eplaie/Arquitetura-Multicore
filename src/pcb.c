@@ -1,6 +1,9 @@
 #include "pcb.h"
 #include "cpu.h"
 #include "os_display.h"
+#include "cache.h"
+
+extern CacheEntry cache[CACHE_SIZE];
 
 PCB* all_processes[MAX_PROCESSES];
 int total_processes = 0;
@@ -27,6 +30,7 @@ PCB* create_pcb(void) {
     pcb->memory_limit = NUM_MEMORY;
     pcb->was_completed = false;
     pcb->start_time = 0;  
+    pcb->lottery_selections = 0;
 
     pcb->registers = calloc(NUM_REGISTERS, sizeof(unsigned short int));
     if (!pcb->registers) {
@@ -134,47 +138,57 @@ ProcessManager* init_process_manager(int quantum_size) {
 }
 
 void schedule_next_process(cpu* cpu, int core_id) {
-   if (!cpu || !cpu->process_manager) return;
+  if (!cpu || !cpu->process_manager) return;
 
-   ProcessManager* pm = cpu->process_manager;
-   lock_process_manager(pm);
+  ProcessManager* pm = cpu->process_manager;
+  lock_process_manager(pm);
 
-   // Debug only for cache-aware policy
-   if (pm->policy->type == POLICY_CACHE_AWARE) {
-       printf("\n[Debug] Core %d scheduling (Ready: %d)", core_id, pm->ready_count);
-       printf("\n - Core %d available: %d", core_id, cpu->core[core_id].is_available);
-       printf("\n[Debug] About to call select_next");
-   }
+  if (pm->ready_count > 0) {
+      // Métricas específicas para Cache-Aware
+      if (pm->policy->type == POLICY_CACHE_AWARE) {
+          printf("\n[Cache Analysis] Escalonando processos");
+          printf("\n[Debug] Core %d scheduling (Ready: %d)", core_id, pm->ready_count);
+          printf("\n - Core %d available: %d", core_id, cpu->core[core_id].is_available);
+          
+          for(int i = 0; i < pm->ready_count; i++) {
+              PCB* process = pm->ready_queue[i];
+              CacheEntry* entry = &cache[process->base_address % CACHE_SIZE];
+              
+              printf("\n\nProcesso P%d:", process->pid);
+              printf("\n - Hits/Misses: %d/%d", entry->hits, entry->misses);
+              printf("\n - Hit Ratio: %.2f%%", entry->hit_ratio * 100);
+              printf("\n - Último acesso: %lds atrás", time(NULL) - entry->last_access);
+          }
+          printf("\n[Debug] About to call select_next");
+      }
 
-   if (pm->ready_count > 0) {
-       PCB* next_process = pm->policy->select_next(pm);
-       if (next_process) {
-           if (next_process->start_time == 0) {
-               next_process->start_time = pm->current_time;
-           }
-           
-           // Resetar quantum e estado do core
-           cpu->core[core_id].quantum_remaining = pm->quantum_size;
-           cpu->core[core_id].is_available = false;
-           cpu->core[core_id].current_process = next_process;
-           cpu->core[core_id].PC = next_process->PC;
-           
-           next_process->state = RUNNING;
-           next_process->core_id = core_id;
-           
-           restore_context(next_process, &cpu->core[core_id]);
-           show_process_state(next_process->pid, "READY", "RUNNING");
-           
-           if (pm->policy->type == POLICY_CACHE_AWARE) {
-               printf("\n[Cache Debug] Process %d scheduled on core %d", 
-                   next_process->pid, core_id);
-               printf("\n - PC: %d", next_process->PC);
-               printf("\n - Quantum: %d", cpu->core[core_id].quantum_remaining);
-           }
-       }
-   }
+      PCB* next_process = pm->policy->select_next(pm);
+      if (next_process) {
+          if (next_process->start_time == 0) {
+              next_process->start_time = pm->current_time;
+          }
+          
+          cpu->core[core_id].quantum_remaining = pm->quantum_size;
+          cpu->core[core_id].is_available = false;
+          cpu->core[core_id].current_process = next_process;
+          cpu->core[core_id].PC = next_process->PC;
+          
+          next_process->state = RUNNING;
+          next_process->core_id = core_id;
+          
+          restore_context(next_process, &cpu->core[core_id]);
+          show_process_state(next_process->pid, "READY", "RUNNING");
+          
+          if (pm->policy->type == POLICY_CACHE_AWARE) {
+              printf("\n[Cache Debug] Process %d scheduled on core %d", 
+                  next_process->pid, core_id);
+              printf("\n - PC: %d", next_process->PC);
+              printf("\n - Quantum: %d", cpu->core[core_id].quantum_remaining);
+          }
+      }
+  }
 
-   unlock_process_manager(pm);
+  unlock_process_manager(pm);
 }
 
 void check_blocked_processes(cpu* cpu) {

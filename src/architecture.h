@@ -19,7 +19,8 @@ void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc,
                       peripherals* peripherals, architecture_state* state);
 
 void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, 
-                      peripherals* peripherals, architecture_state* state);
+                      peripherals* peripherals, architecture_state* state,
+                      int cycle_count);
 
 static inline void init_mutex(pthread_mutex_t* mutex) {
     pthread_mutexattr_t attr;
