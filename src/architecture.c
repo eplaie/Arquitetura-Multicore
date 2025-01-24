@@ -49,7 +49,7 @@ void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc,
        args->state = state;
        cpu->core[i].arch_state = state;
 
-       printf("\n[Debug] Argumentos da thread %d:", i);
+    //    printf("\n[Debug] Argumentos da thread %d:", i);
        printf("\n - RAM: %p", (void*)args->memory_ram);
        printf("\n - RAM vector: %p", (void*)args->memory_ram->vector);
        
@@ -130,7 +130,7 @@ void check_system_state(architecture_state* state, cpu* cpu) {
 void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc,
                      peripherals* peripherals, architecture_state* state,
                      int cycle_count) {
-   printf("\n═══════════ Métricas Finais ═══════════");
+   printf("\n\n\n\n═══════════ Métricas Finais ═══════════");
 
     //    printf("\nDebug - Process Manager: %p", state->process_manager);
     if (state->process_manager) {
@@ -200,6 +200,7 @@ void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc,
                                 (float)cache[i].hits/(cache[i].hits + cache[i].misses) * 100);
                         }
                     }
+                print_instruction_patterns();
             break;
                
            case POLICY_SJF:

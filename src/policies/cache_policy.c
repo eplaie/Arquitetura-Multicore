@@ -68,7 +68,7 @@ Policy* create_cache_aware_policy() {
     policy->name = "Cache-Aware Scheduling";
     policy->is_preemptive = true;
     policy->select_next = cache_aware_select_next;
-    policy->on_quantum_expired = rr_on_quantum_expired;  // Reuse RR quantum handling
+    policy->on_quantum_expired = rr_on_quantum_expired;  
     policy->on_process_complete = rr_on_process_complete;
     
     init_cache();
