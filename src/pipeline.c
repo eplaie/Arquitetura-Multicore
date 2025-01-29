@@ -118,6 +118,18 @@ void execute_pipeline_cycle(architecture_state* state, cpu* cpu,
        current_process->PC
    );
 
+   if(instruction) {
+    // Verificar cache com a instrução atual
+    check_cache(current_process->base_address + current_process->PC, instruction);
+    
+    // Se for LOAD ou LOOP, fazer prefetch
+    type_of_instruction instr_type = decode_instruction(instruction);
+    if(instr_type == LOAD || instr_type == LOOP) {
+        prefetch_block(current_process->base_address + current_process->PC + 1, 
+                      instr_type == LOOP ? 2 : 1);
+    }
+}
+
 if (!instruction || strlen(instruction) == 0 || current_process->PC >= current_process->memory_limit) {
     printf("\n[Core %d] Processo %d finalizado\n", core_id, current_process->pid);
     

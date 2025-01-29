@@ -200,6 +200,7 @@ void free_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc,
                                 (float)cache[i].hits/(cache[i].hits + cache[i].misses) * 100);
                         }
                     }
+                    // print_cache_statistics();
                 print_instruction_patterns();
             break;
                

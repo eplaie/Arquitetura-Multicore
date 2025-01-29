@@ -4,7 +4,27 @@
 #include "../os_display.h"  
 
 
-    PCB* cache_aware_select_next(ProcessManager* pm) {
+float calculate_process_cache_score(PCB* process) {
+    int idx = process->base_address % CACHE_SIZE;
+    
+    // Aumentar o peso do hit ratio
+    float hit_ratio_factor = cache[idx].hit_ratio * 0.7f;
+    
+    // Considerar a idade do bloco na cache
+    float age_factor = 1.0f / (cache[idx].age + 1) * 0.2f;
+    
+    // Bônus para processos já carregados
+    float presence_bonus = check_cache(process->base_address, NULL) ? 0.1f : 0.0f;
+    
+    return (hit_ratio_factor + age_factor + presence_bonus) * 100.0f;
+}
+
+char* get_program_content(PCB* pcb, ram* memory_ram) {
+    if (!pcb || !memory_ram) return NULL;
+    return memory_ram->vector + pcb->base_address;
+}
+
+PCB* cache_aware_select_next(ProcessManager* pm) {
     if (!pm || pm->ready_count == 0 || !pm->cpu || !pm->cpu->memory_ram) return NULL;
     
     int core_id = -1;
@@ -20,12 +40,9 @@
     float best_score = -1;
     int best_idx = 0;
 
-    // Simplificar cálculo de score temporariamente para debug
+    // Usar o novo cálculo de score
     for(int i = 0; i < pm->ready_count; i++) {
-        float score = 0.0f;
-        if(check_cache(pm->ready_queue[i]->base_address)) {
-            score += 0.7f;
-        }
+        float score = calculate_process_cache_score(pm->ready_queue[i]);
         
         if(score > best_score) {
             best_score = score;
@@ -41,11 +58,9 @@
         pm->cpu->core[core_id].is_available = false;
         pm->cpu->core[core_id].current_process = selected;
 
-        // Atualizar cache
         update_cache(selected->base_address, 
                     get_program_content(selected, pm->cpu->memory_ram));
 
-        // Remover da fila
         for(int i = best_idx; i < pm->ready_count - 1; i++) {
             pm->ready_queue[i] = pm->ready_queue[i + 1];
         }
@@ -62,7 +77,7 @@ Policy* create_cache_aware_policy() {
     Policy* policy = malloc(sizeof(Policy));
     if(!policy) return NULL;
     
-      printf("\n[Cache Policy] Creating policy"); 
+    printf("\n[Cache Policy] Creating policy"); 
 
     policy->type = POLICY_CACHE_AWARE;
     policy->name = "Cache-Aware Scheduling";

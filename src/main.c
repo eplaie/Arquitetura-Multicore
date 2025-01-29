@@ -188,7 +188,7 @@ for (int core_id = 0; core_id < NUM_CORES; core_id++) {
 
     usleep(50000);
 }
-
+      print_cache_statistics();
 
     printf("\n[Sistema] Limpando recursos...");
     

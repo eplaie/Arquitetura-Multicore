@@ -2,6 +2,7 @@
     #define POLICY_H
 
     #include "../pcb.h"
+    
 
     // Tipos de políticas disponíveis
     typedef enum {
@@ -29,5 +30,6 @@
     int get_program_length(PCB* process);
     void rr_on_quantum_expired(ProcessManager* pm, PCB* process);
     void rr_on_process_complete(ProcessManager* pm, PCB* process);
+    float calculate_process_cache_score(PCB* process);
 
     #endif
