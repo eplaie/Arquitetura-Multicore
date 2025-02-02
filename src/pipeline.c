@@ -118,11 +118,29 @@ void execute_pipeline_cycle(architecture_state* state, cpu* cpu,
        current_process->PC
    );
 
-   if(instruction) {
-    // Verificar cache com a instrução atual
-    check_cache(current_process->base_address + current_process->PC, instruction);
+if(instruction) {
+    bool cache_hit = check_cache(current_process->base_address + current_process->PC, instruction);
     
-    // Se for LOAD ou LOOP, fazer prefetch
+    if(cache_enabled && cache_hit) {
+        printf("\n[Pipeline] Cache hit - Pulando execução da instrução %s", instruction);
+        printf("\n[Pipeline Performance] Cache hit na instrução %s", instruction);
+        printf("\n - Economizando %d ciclos ao pular pipeline", MISS_PENALTY);
+        
+        // Atualizar contadores e retornar
+        current_process->PC++;
+        current_core->PC = current_process->PC;
+        current_process->total_instructions++;
+        state->total_instructions++;
+        
+        if(instruction) free(instruction);
+        pthread_mutex_unlock(&state->pipeline->IF.stage_mutex);
+        unlock_process_manager(cpu->process_manager);
+        pthread_mutex_unlock(&state->pipeline->pipeline_mutex);
+        pthread_mutex_unlock(&active_ram->mutex);
+        return;
+    }
+    
+    // Se não está em cache e é LOAD ou LOOP, fazer prefetch
     type_of_instruction instr_type = decode_instruction(instruction);
     if(instr_type == LOAD || instr_type == LOOP) {
         prefetch_block(current_process->base_address + current_process->PC + 1, 

@@ -4,6 +4,7 @@
 CacheEntry cache[CACHE_SIZE];
 CacheAccess access_history[MAX_ACCESS_HISTORY];
 int access_count = 0;
+bool cache_enabled = true;
 
 static InstructionPattern known_patterns[MAX_PATTERNS] = { 
     {"LOAD C0", 0, true, 1},
@@ -12,6 +13,16 @@ static InstructionPattern known_patterns[MAX_PATTERNS] = {
     {"MUL", 0, false, 0},
     {"STORE", 0, true, 1}
 };
+
+
+void set_cache_enabled(bool enabled) {
+    cache_enabled = enabled;
+    if (!enabled) {
+        // Limpa completamente todas as estatísticas
+        init_cache();  // Reinicializa a cache completamente
+        access_count = 0;
+    }
+}
 
 void init_cache(void) {
     for(int i = 0; i < CACHE_SIZE; i++) {
@@ -37,6 +48,14 @@ void init_cache(void) {
 }
 
 bool check_cache(unsigned int address, char* current_instruction) {
+    if (!cache_enabled) {
+        // Se cache está desabilitada, sempre conta como miss
+        // unsigned idx = address % CACHE_SIZE;
+        // cache[idx].misses++;
+        // printf("\n[Cache] Cache desabilitada - Miss forçado no endereço %u", address);
+        return false;
+    }
+
     unsigned idx = address % CACHE_SIZE;
     bool is_hit = cache[idx].valid && cache[idx].tag == address;
     bool was_prefetched = cache[idx].prefetched;
@@ -100,7 +119,25 @@ bool check_cache(unsigned int address, char* current_instruction) {
     return is_hit;
 }
 
+float get_speedup_ratio(void) {
+    int total_hits = 0, total_misses = 0;
+    
+    for(int i = 0; i < CACHE_SIZE; i++) {
+        total_hits += cache[i].hits;
+        total_misses += cache[i].misses;
+    }
+    
+    if (total_hits + total_misses == 0) return 1.0f;
+    
+    // Calcular ciclos economizados
+    int cycles_with_cache = total_hits + (total_misses * MISS_PENALTY);
+    int cycles_without_cache = (total_hits + total_misses) * MISS_PENALTY;
+    
+    return cycles_without_cache / (float)cycles_with_cache;
+}
+
 void prefetch_block(unsigned int base_address, int distance) {
+    if (!cache_enabled) return;
     printf("\n[Prefetch] Iniciando prefetch para endereço base %u", base_address);
 
     // Calcular próximos endereços sequencialmente
@@ -151,6 +188,7 @@ int estimate_loop_size(char* content __attribute__((unused)), char* loop_start) 
 }
 
 void print_cache_statistics(void) {
+    if (!cache_enabled) return;
     printf("\n═══════════ Análise de Prefetching ═══════════\n");
     
     // Análise de LOAD sequenciais
@@ -233,6 +271,7 @@ int find_lru_entry(void) {
 }
 
 void update_cache(unsigned int address, char* data) {
+    if (!cache_enabled) return;
     static int timestamp = 0;
     int idx = address % CACHE_SIZE;
     

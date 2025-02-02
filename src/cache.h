@@ -6,12 +6,15 @@
 #include <math.h>
 #include <time.h>
 
-#define CACHE_SIZE 128
-#define MISS_PENALTY 10
-#define MAX_ACCESS_HISTORY 100  // Aumentei para ter mais histórico
-#define MAX_PATTERNS 5
-#define MAX_PATTERN_LENGTH 50
-#define BLOCK_SIZE 64  // Novo: tamanho do bloco para prefetch
+#define CACHE_SIZE 64          // Aumentar para 64 ou 128 para mais entradas
+#define MISS_PENALTY 20        // Aumentar para 20 para mostrar mais impacto
+#define MAX_ACCESS_HISTORY 200 // Ok para histórico maior
+#define MAX_PATTERNS 8         // Aumentar para detectar mais padrões
+#define MAX_PATTERN_LENGTH 100 // Aumentar para padrões maiores
+#define BLOCK_SIZE 64         // Ok para o tamanho atual
+
+
+extern bool cache_enabled;
 
 // Estrutura para registrar acessos à cache
 typedef struct {
@@ -56,6 +59,9 @@ typedef struct {
    char* current_instruction;
 } CacheEntry;
 
+// Adicione às funções declaradas
+float calculate_instruction_similarity(const char* instr1, const char* instr2);
+
 // Funções principais
 void init_cache(void);
 bool check_cache(unsigned int address, char* current_instruction);
@@ -76,5 +82,9 @@ void print_cache_statistics(void);
 extern CacheEntry cache[CACHE_SIZE];
 extern CacheAccess access_history[MAX_ACCESS_HISTORY];
 extern int access_count;
+
+// Na lista de funções
+void set_cache_enabled(bool enabled);
+float get_speedup_ratio(void);  // Para calcular o ganho de performance
 
 #endif

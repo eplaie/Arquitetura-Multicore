@@ -11,7 +11,7 @@
 #include "ram.h"  
 #include "architecture_state.h"
 
-#define DEFAULT_QUANTUM 4
+#define DEFAULT_QUANTUM 25
 #define MAX_CYCLES 5
 
 // Funções principais 
