@@ -1,0 +1,26 @@
+Modificar no cache.h
+#define CACHE_SIZE  32 para #define CACHE_SIZE  4
+
+
+Programa 1
+LOAD A0 100
+LOAD H0 100
+LOOP A0
+LOAD A1 101
+ADD A0 A1
+SUB A0 1
+L_END
+STORE A0 200
+
+Programa 2
+LOAD A0 1
+LOAD B0 2
+LOAD C0 3
+LOAD D0 4
+LOAD E0 5
+
+Programa 3
+LOAD A0 10
+LOAD B0 5
+LOAD C0 2
+ADD A0 B0
