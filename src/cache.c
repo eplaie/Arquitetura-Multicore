@@ -267,11 +267,15 @@ void update_cache(unsigned int address, char* data) {
            address, idx);
 
     if(cache[idx].valid && cache[idx].tag != address) {
+        cache[idx].misses++;
+        int lru_idx = find_lru_entry();
         printf("\n║ ├── Conflito detectado                     ║");
         printf("\n║ │   ├── Tag antiga: 0x%04X                ║",
                cache[idx].tag);
         printf("\n║ │   └── Nova tag: 0x%04X                  ║",
                address);
+        printf("\n║ │   └── LRU: BLOCO %d substituído (idade: %d ciclos)║",
+               lru_idx, cache[lru_idx].age);
     }
 
     // Atualizar estatísticas
@@ -290,6 +294,22 @@ void update_cache(unsigned int address, char* data) {
            cache[idx].hit_ratio * 100);
 
     printf("\n╚═════════════════════════════════════════════╝\n");
+
+    if (cache[idx].hits + cache[idx].misses > 0) {
+        cache[idx].hit_ratio = (float)cache[idx].hits /
+                            (cache[idx].hits + cache[idx].misses);
+    }
+
+    // Envelhecer outros blocos
+    for(unsigned int i = 0; i < CACHE_SIZE; i++) {
+        if(i != idx && cache[i].valid) {
+            cache[i].age++;
+        }
+    }
+
+    print_cache_state();
+
+
 }
 float calculate_cache_efficiency(int index) {
     if(cache[index].hits + cache[index].misses == 0) {

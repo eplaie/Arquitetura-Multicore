@@ -6,10 +6,10 @@
 #include <math.h>
 #include <time.h>
 
-#define CACHE_SIZE 64          // Aumentar para 64 ou 128 para mais entradas
+#define CACHE_SIZE  24     // Aumentar para 64 ou 128 para mais entradas
 #define MISS_PENALTY 20        // Aumentar para 20 para mostrar mais impacto
 #define MAX_ACCESS_HISTORY 200 // Ok para histórico maior
-#define MAX_PATTERNS 8         // Aumentar para detectar mais padrões
+#define MAX_PATTERNS 16         // Aumentar para detectar mais padrões
 #define MAX_PATTERN_LENGTH 100 // Aumentar para padrões maiores
 #define BLOCK_SIZE 64         // Ok para o tamanho atual
 
