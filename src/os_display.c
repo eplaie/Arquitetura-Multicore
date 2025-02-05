@@ -92,12 +92,12 @@ void show_pipeline_writeback(const char* wb_operation) {
 }
 
 void show_pipeline_start(int cycle, int core_id, int pid) {
-    printf("\n%s┌────── Pipeline (Core %d, P%d, Ciclo %d) ──────┐%s\n", 
+    printf("\n%s┌────── Pipeline (Core %d, P%d, Ciclo %d) ──────┐%s\n",
            COLOR_CYAN, core_id, pid, cycle, COLOR_RESET);
 }
 
 void show_pipeline_end(void) {
-    printf("%s└──────────────────────────────────────────┘%s\n", 
+    printf("%s└──────────────────────────────────────────┘%s\n",
            COLOR_CYAN, COLOR_RESET);
 }
 

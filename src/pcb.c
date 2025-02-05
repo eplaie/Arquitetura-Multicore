@@ -68,9 +68,9 @@ void save_context(PCB* pcb, core* current_core) {
     memcpy(pcb->registers, current_core->registers, NUM_REGISTERS * sizeof(unsigned short int));
     pcb->quantum_remaining = current_core->quantum_remaining;
     
-    printf("\n[Context] Salvando contexto do processo %d", pcb->pid);
-    printf("\n - PC: %d", pcb->PC);
-    printf("\n - Quantum: %d", pcb->quantum_remaining);
+   // printf("\n[Context] Salvando contexto do processo %d", pcb->pid);
+   // printf("\n - PC: %d", pcb->PC);
+   // printf("\n - Quantum: %d", pcb->quantum_remaining);
 }
 
 void restore_context(PCB* pcb, core* current_core) {
@@ -82,7 +82,7 @@ void restore_context(PCB* pcb, core* current_core) {
     
     // printf("\n[Context] Restaurando contexto do processo %d", pcb->pid);
     // printf("\n - PC: %d", current_core->PC);
-    printf("\n - Quantum: %d", current_core->quantum_remaining);
+    //printf("\n - Quantum: %d", current_core->quantum_remaining);
 }
 
 void free_pcb(PCB* pcb) {
@@ -151,7 +151,7 @@ void schedule_next_process(cpu* cpu, int core_id) {
       // Métricas específicas para Cache-Aware
       if (pm->policy->type == POLICY_CACHE_AWARE) {
           printf("\n[Cache Analysis] Escalonando processos");
-          printf("\n[Debug] Core %d scheduling (Ready: %d)", core_id, pm->ready_count);
+        //   printf("\n[Debug] Core %d scheduling (Ready: %d)", core_id, pm->ready_count);
           printf("\n - Core %d available: %d", core_id, cpu->core[core_id].is_available);
           
           for(int i = 0; i < pm->ready_count; i++) {
@@ -163,7 +163,7 @@ void schedule_next_process(cpu* cpu, int core_id) {
               printf("\n - Hit Ratio: %.2f%%", entry->hit_ratio * 100);
               printf("\n - Último acesso: %lds atrás", time(NULL) - entry->last_access);
           }
-          printf("\n[Debug] About to call select_next");
+        //   printf("\n[Debug] About to call select_next");
       }
 
       PCB* next_process = pm->policy->select_next(pm);
@@ -191,8 +191,8 @@ void schedule_next_process(cpu* cpu, int core_id) {
           show_process_state(next_process->pid, "READY", "RUNNING");
           
           if (pm->policy->type == POLICY_CACHE_AWARE) {
-              printf("\n[Cache Debug] Process %d scheduled on core %d", 
-                  next_process->pid, core_id);
+            //   printf("\n[Cache Debug] Process %d scheduled on core %d", 
+            //       next_process->pid, core_id);
               printf("\n - PC: %d", next_process->PC);
               printf("\n - Quantum: %d", cpu->core[core_id].quantum_remaining);
           }

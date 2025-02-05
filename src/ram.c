@@ -16,8 +16,8 @@ ram* allocate_ram(size_t memory_size) {
         return NULL;
     }
 
-    printf("RAM alocada com sucesso (%zu bytes)\n", memory_size);
-    printf("RAM vector: %p\n", (void*)memory_ram->vector);
+    //printf("RAM alocada com sucesso (%zu bytes)\n", memory_size);
+    //printf("RAM vector: %p\n", (void*)memory_ram->vector);
 
     memory_ram->size = memory_size;
     memory_ram->initialized = true;
@@ -32,23 +32,23 @@ bool verify_ram(ram* memory_ram, const char* context) {
         return false;
     }
     if (!memory_ram->vector) {
-        printf("\n[Verify RAM] Vector nulo em %s", context);
+      //  printf("\n[Verify RAM] Vector nulo em %s", context);
         return false;
     }
-    printf("\n[Verify RAM] RAM ok em %s:", context);
-    printf("\n - RAM: %p", (void*)memory_ram);
-    printf("\n - Vector: %p", (void*)memory_ram->vector);
+    //printf("\n[Verify RAM] RAM ok em %s:", context);
+    //printf("\n - RAM: %p", (void*)memory_ram);
+    //printf("\n - Vector: %p", (void*)memory_ram->vector);
     return true;
 }
 
 void write_ram(ram* memory_ram, unsigned short int address, const char* data) {
     if (!memory_ram || !memory_ram->vector) {
-        printf("\n[RAM] Erro: RAM inválida ou não inicializada");
+       // printf("\n[RAM] Erro: RAM inválida ou não inicializada");
         return;
     }
 
     if (address >= NUM_MEMORY) {
-        printf("\n[RAM] Erro: Endereço fora dos limites");
+        //printf("\n[RAM] Erro: Endereço fora dos limites");
         return;
     }
 
@@ -61,7 +61,7 @@ void write_ram(ram* memory_ram, unsigned short int address, const char* data) {
         return;
     }
 
-    printf("\n[RAM] Escrevendo '%s' no endereço %d", data, address);
+    //printf("\n[RAM] Escrevendo '%s' no endereço %d", data, address);
 
     // Copiar os dados para a RAM
     strncpy(memory_ram->vector + address, data, data_length);
@@ -71,7 +71,7 @@ void write_ram(ram* memory_ram, unsigned short int address, const char* data) {
         memory_ram->vector[address + data_length] = '\0';
     }
 
-    printf("\n[RAM] Escrita concluída com sucesso");
+    //printf("\n[RAM] Escrita concluída com sucesso");
 }
 
 void load_program_on_ram(struct cpu* cpu, char* program_content, unsigned int base_address, PCB* pcb) {
@@ -80,10 +80,10 @@ void load_program_on_ram(struct cpu* cpu, char* program_content, unsigned int ba
         printf("\nERRO: CPU, RAM ou PCB inválido\n");
         return;
     }
-    printf("\n[RAM] Verificação antes de carregar:");
-    printf("\n - RAM: %p", (void*)cpu->memory_ram);
-    printf("\n - RAM vector: %p", (void*)cpu->memory_ram->vector);
-    printf("\n - Program base address: %u", base_address);
+    //printf("\n[RAM] Verificação antes de carregar:");
+   // printf("\n - RAM: %p", (void*)cpu->memory_ram);
+    //printf("\n - RAM vector: %p", (void*)cpu->memory_ram->vector);
+    //printf("\n - Program base address: %u", base_address);
 
      pthread_mutex_lock(&cpu->memory_ram->mutex);
 
@@ -98,10 +98,10 @@ void load_program_on_ram(struct cpu* cpu, char* program_content, unsigned int ba
     }
 
     size_t program_length = strlen(program_content);
-    printf("\n[RAM] Carregando programa:");
-    printf("\n - Tamanho: %zu bytes", program_length);
-    printf("\n - Endereço base: %u", base_address);
-    printf("\n - Conteúdo: %s\n", program_content);
+    //printf("\n[RAM] Carregando programa:");
+    //printf("\n - Tamanho: %zu bytes", program_length);
+    //printf("\n - Endereço base: %u", base_address);
+    //printf("\n - Conteúdo: %s\n", program_content);
 
     pcb->program_size = program_length;
 
@@ -120,6 +120,6 @@ void load_program_on_ram(struct cpu* cpu, char* program_content, unsigned int ba
     dest_addr[program_length] = '\0';
 
     pthread_mutex_unlock(&cpu->memory_ram->mutex);
-    printf("[RAM] Programa carregado com sucesso em 0x%p\n", (void*)dest_addr);
+    //printf("[RAM] Programa carregado com sucesso em 0x%p\n", (void*)dest_addr);
 
 }

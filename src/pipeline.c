@@ -26,7 +26,7 @@ void reset_pipeline_stage(pipeline_stage* stage) {
 static void handle_process_completion(architecture_state* state, cpu* cpu,
                                    PCB* process, int core_id, int cycle_count,
                                    char* instruction) {
-    printf("[Core %d] Processo %d finalizado\n", core_id, process->pid);
+    //printf("[Core %d] Processo %d finalizado\n", core_id, process->pid);
 
     pthread_mutex_lock(&state->global_mutex);
     state->completed_processes++;
@@ -81,12 +81,12 @@ void execute_pipeline_cycle(architecture_state* state, cpu* cpu,
        return;
    }
 
-   show_pipeline_start(cycle_count, core_id, current_process->pid);
+   // show_pipeline_start(cycle_count, core_id, current_process->pid);
    
 //    printf("\n[Debug] Pipeline - Core %d, Processo %d:", core_id, current_process->pid);
-   printf("\n - Base address: %d", current_process->base_address);
-   printf("\n - PC: %d", current_process->PC);
-   printf("\n - Quantum remaining: %d", current_core->quantum_remaining);
+  // printf("\n - Base address: %d", current_process->base_address);
+   //printf("\n - PC: %d", current_process->PC);
+   //printf("\n - Quantum remaining: %d", current_core->quantum_remaining);
 
    if (current_process->PC >= current_process->memory_limit) {
        printf("[Core %d] Processo %d: limite de memória atingido\n", core_id, current_process->pid);
@@ -110,13 +110,43 @@ void execute_pipeline_cycle(architecture_state* state, cpu* cpu,
        return;
    }
 
-   printf("[Core %d] Buscando instrução: base=%d, PC=%d\n", 
-          core_id, current_process->base_address, current_process->PC);
+   //printf("[Core %d] Buscando instrução: base=%d, PC=%d\n",
+          //core_id, current_process->base_address, current_process->PC);
 
    instruction = get_line_of_program(
        active_ram->vector + current_process->base_address,
        current_process->PC
    );
+
+if(instruction) {
+    bool cache_hit = check_cache(current_process->base_address + current_process->PC, instruction);
+    
+    if(cache_enabled && cache_hit) {
+        //printf("\n[Pipeline] Cache hit - Pulando execução da instrução %s", instruction);
+        //printf("\n[Pipeline Performance] Cache hit na instrução %s", instruction);
+       // printf("\n - Economizando %d ciclos ao pular pipeline", MISS_PENALTY);
+        
+        // Atualizar contadores e retornar
+        current_process->PC++;
+        current_core->PC = current_process->PC;
+        current_process->total_instructions++;
+        state->total_instructions++;
+        
+        if(instruction) free(instruction);
+        pthread_mutex_unlock(&state->pipeline->IF.stage_mutex);
+        unlock_process_manager(cpu->process_manager);
+        pthread_mutex_unlock(&state->pipeline->pipeline_mutex);
+        pthread_mutex_unlock(&active_ram->mutex);
+        return;
+    }
+    
+    // Se não está em cache e é LOAD ou LOOP, fazer prefetch
+    type_of_instruction instr_type = decode_instruction(instruction);
+    if(instr_type == LOAD || instr_type == LOOP) {
+        prefetch_block(current_process->base_address + current_process->PC + 1, 
+                      instr_type == LOOP ? 2 : 1);
+    }
+}
 
 if (!instruction || strlen(instruction) == 0 || current_process->PC >= current_process->memory_limit) {
     printf("\n[Core %d] Processo %d finalizado\n", core_id, current_process->pid);
@@ -150,7 +180,7 @@ if (!instruction || strlen(instruction) == 0 || current_process->PC >= current_p
     return;
 }
 
-    show_pipeline_fetch(instruction);
+    // show_pipeline_fetch(instruction);
     state->pipeline->IF.instruction = instruction;
     pthread_mutex_unlock(&state->pipeline->IF.stage_mutex);
 
@@ -158,7 +188,7 @@ if (!instruction || strlen(instruction) == 0 || current_process->PC >= current_p
     pthread_mutex_lock(&state->pipeline->ID.stage_mutex);
     type_of_instruction instr_type = decode_instruction(instruction);
     state->pipeline->ID.type = instr_type;
-    show_pipeline_decode(get_instruction_name(instr_type));
+    // show_pipeline_decode(get_instruction_name(instr_type));
     pthread_mutex_unlock(&state->pipeline->ID.stage_mutex);
 
     // 3. Execute
@@ -170,7 +200,7 @@ if (!instruction || strlen(instruction) == 0 || current_process->PC >= current_p
 
     execute_instruction(cpu, memory_ram, instruction, instr_type, core_id, &instr_processor,
                        memory_ram->vector + current_process->base_address);
-    show_pipeline_execute(get_instruction_name(instr_type));
+    // show_pipeline_execute(get_instruction_name(instr_type));
     pthread_mutex_unlock(&state->pipeline->EX.stage_mutex);
 
     // 4. Memory Access
@@ -183,7 +213,7 @@ if (!instruction || strlen(instruction) == 0 || current_process->PC >= current_p
     handle_writeback_stage(instr_type);
     pthread_mutex_unlock(&state->pipeline->WB.stage_mutex);
 
-    show_pipeline_end();
+    // show_pipeline_end();
 
     // Atualização de estado
     pthread_mutex_lock(&state->global_mutex);
@@ -197,10 +227,10 @@ if (!instruction || strlen(instruction) == 0 || current_process->PC >= current_p
     current_process->cycles_executed = cycle_count;
 
     if (current_core->quantum_remaining <= 0) {
-    printf("\n[Debug] Quantum expirado - Core %d", core_id);
-    printf("\n - Processo: %d", current_process->pid);
-    printf("\n - PC atual: %d", current_process->PC);
-    printf("\n - Instruções executadas: %d", current_process->total_instructions);
+    //printf("\n[Debug] Quantum expirado - Core %d", core_id);
+   // printf("\n - Processo: %d", current_process->pid);
+    //printf("\n - PC atual: %d", current_process->PC);
+   // printf("\n - Instruções executadas: %d", current_process->total_instructions);
 
     // Atualiza estado
     current_process->state = READY;
@@ -214,8 +244,8 @@ if (!instruction || strlen(instruction) == 0 || current_process->PC >= current_p
         cpu->process_manager->policy->on_quantum_expired(cpu->process_manager, current_process);
 
         // printf("\n[Debug] Antes de release_core:");
-       printf("\n - Ready count: %d", cpu->process_manager->ready_count);
-       printf("\n - Core %d quantum: %d", core_id, current_core->quantum_remaining);
+       //printf("\n - Ready count: %d", cpu->process_manager->ready_count);
+      // printf("\n - Core %d quantum: %d", core_id, current_core->quantum_remaining);
 
         release_core(cpu, core_id);
 
@@ -273,20 +303,20 @@ const char* get_instruction_name(type_of_instruction type) {
 
 void handle_memory_stage(type_of_instruction type) {
     if (type == STORE) {
-        show_pipeline_memory("Escrita na memória");
+        // show_pipeline_memory("Escrita na memória");
     } else if (type == LOAD) {
-        show_pipeline_memory("Leitura da memória");
+        // show_pipeline_memory("Leitura da memória");
     } else {
-        show_pipeline_memory(NULL);
+        // show_pipeline_memory(NULL);
     }
 }
 
 void handle_writeback_stage(type_of_instruction type) {
     if (type == ADD || type == SUB || type == MUL || 
         type == DIV || type == LOAD) {
-        show_pipeline_writeback("Atualizando registrador");
+        // show_pipeline_writeback("Atualizando registrador");
     } else {
-        show_pipeline_writeback(NULL);
+        // show_pipeline_writeback(NULL);
     }
 }
 

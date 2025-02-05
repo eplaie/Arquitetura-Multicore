@@ -5,6 +5,7 @@
 #include "architecture.h"
 #include "common_types.h"
 #include "cpu.h" 
+#include "ram.h"
 #include "policies/policy.h"
 
 typedef enum {
@@ -64,6 +65,7 @@ PCB* create_pcb(void);
 void save_context(PCB* pcb, core* current_core);
 void restore_context(PCB* pcb, core* current_core);
 void free_pcb(PCB* pcb);
+char* get_program_content(PCB* pcb, ram* memory_ram);
 
 // Funções auxiliares
 const char* state_to_string(process_state state);

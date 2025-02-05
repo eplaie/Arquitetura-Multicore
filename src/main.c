@@ -61,6 +61,20 @@ int main(void) {
 
     init_cache();
 
+        printf("\n╔════════ Configuração de Cache ════════╗");
+        printf("\n║  Deseja utilizar cache? (s/n):        ║");
+        printf("\n╚═══════════════════════════════════════╝");
+        printf("\nEscolha: ");
+        char use_cache;
+        scanf(" %c", &use_cache);
+        set_cache_enabled(use_cache == 's' || use_cache == 'S');
+
+        if (cache_enabled) {
+            printf("\n[Cache] Cache habilitada - Executando com otimizações");
+        } else {
+            printf("\n[Cache] Cache desabilitada - Executando sem otimizações");
+        }
+
     // 3. Inicialização da arquitetura
     init_architecture(cpu, memory_ram, memory_disc, p, arch_state);
 
@@ -182,13 +196,22 @@ for (int core_id = 0; core_id < NUM_CORES; core_id++) {
         }
     }
 
-    show_system_metrics(cycle_count, arch_state->total_instructions);
-    show_scheduler_state(cpu->process_manager->ready_count, 
-                        cpu->process_manager->blocked_count);
+
 
     usleep(50000);
 }
 
+        if (cache_enabled) {
+            printf("\n\n═══════════ Métricas de Cache ═══════════");
+            printf("\nSpeedup com cache: %.2fx", get_speedup_ratio());
+            printf("\nModo de execução: Otimizado");
+            printf("\n═════════════════════════════════════\n");
+            print_cache_statistics();
+        } else {
+            printf("\n\n═══════════ Métricas de Cache ═══════════");
+            printf("\nModo de execução: Sem otimizações");
+            printf("\n═════════════════════════════════════\n");
+        }
 
     printf("\n[Sistema] Limpando recursos...");
     

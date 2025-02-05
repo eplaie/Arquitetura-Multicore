@@ -186,7 +186,7 @@ void release_core(cpu* cpu, int core_id) {
     current_core->quantum_remaining = 0;  // Será resetado na próxima escalonação
     current_core->PC = 0;
     
-    printf("\n[Core %d] Core liberado", core_id);
+    //printf("\n[Core %d] Core liberado", core_id);
 }
 
 core* get_current_core(cpu* cpu) {

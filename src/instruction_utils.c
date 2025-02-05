@@ -42,7 +42,7 @@ unsigned short int ula(unsigned short int operating_a, unsigned short int operat
 }
 
 unsigned short int verify_address(ram* memory_ram, char* address, unsigned short int num_positions) {
-    printf("\n[Verify] Verificando endereço: %s (tamanho: %d)", address, num_positions);
+    //printf("\n[Verify] Verificando endereço: %s (tamanho: %d)", address, num_positions);
     
     if (!memory_ram || !address || address[0] != 'A') {
         printf("\n[Verify] Erro: Parâmetros inválidos ou formato incorreto");
@@ -94,7 +94,7 @@ void load(cpu* cpu, const char* instruction, unsigned short int index_core) {
 }
 
 void store(cpu* cpu, ram* memory_ram, const char* instruction, unsigned short int index_core) {
-    printf("\n[Store] Iniciando instrução: '%s'", instruction);
+    //printf("\n[Store] Iniciando instrução: '%s'", instruction);
 
     char *instruction_copy, *token, *register_name, *memory_address;
     char buffer[10]; 
@@ -102,14 +102,14 @@ void store(cpu* cpu, ram* memory_ram, const char* instruction, unsigned short in
 
     instruction_copy = strdup(instruction);
     if (!instruction_copy) {
-        printf("\n[Store] Erro: Falha ao copiar instrução");
+        //printf("\n[Store] Erro: Falha ao copiar instrução");
         return;
     }
 
     // Verifica STORE
     token = strtok(instruction_copy, " "); 
     if (strcmp(token, "STORE") != 0) {
-        printf("\n[Store] Erro: Instrução inválida - STORE\n");
+       // printf("\n[Store] Erro: Instrução inválida - STORE\n");
         free(instruction_copy);
         return;
     }
@@ -117,35 +117,35 @@ void store(cpu* cpu, ram* memory_ram, const char* instruction, unsigned short in
     // Pega registro fonte
     token = strtok(NULL, " ");
     register_name = token;
-    printf("\n[Store] Registro fonte: %s", register_name);
+    //printf("\n[Store] Registro fonte: %s", register_name);
 
     // Pega endereço destino
     token = strtok(NULL, " ");
     memory_address = token;
-    printf("\n[Store] Endereço destino: %s", memory_address);
+   // printf("\n[Store] Endereço destino: %s", memory_address);
 
     // Obtém índice do registro
     register_index = get_register_index(register_name);
-    printf("\n[Store] Índice do registro: %d", register_index);
+   // printf("\n[Store] Índice do registro: %d", register_index);
 
     // Obtém valor do registro
     register_value = cpu->core[index_core].registers[register_index];
-    printf("\n[Store] Valor do registro: %d", register_value);
+   // printf("\n[Store] Valor do registro: %d", register_value);
 
     // Converte para string
     sprintf(buffer, "%d", register_value);  
-    printf("\n[Store] Valor convertido: %s", buffer);
+   // printf("\n[Store] Valor convertido: %s", buffer);
 
     // Verifica endereço
     unsigned short int address = verify_address(memory_ram, memory_address, strlen(buffer));
-    printf("\n[Store] Endereço verificado: %d", address);
+    //printf("\n[Store] Endereço verificado: %d", address);
     
     // Escreve na RAM
     write_ram(memory_ram, address, buffer);
-    printf("\n[Store] Escrita na RAM concluída");
+    //printf("\n[Store] Escrita na RAM concluída");
 
     free(instruction_copy);
-    printf("\n[Store] Instrução concluída\n");
+    //printf("\n[Store] Instrução concluída\n");
 }
 
 

@@ -71,7 +71,7 @@ char* get_line_of_program(char* program_start, unsigned short int line_number) {
         }
     }
 
-    printf("[Position] Posição atual: %.20s...\n", current);
+    //printf("[Position] Posição atual: %.20s...\n", current);
 
     // Encontra fim da linha atual
     char* line_end = strchr(current, '\n');

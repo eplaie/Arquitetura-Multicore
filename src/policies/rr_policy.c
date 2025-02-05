@@ -30,9 +30,9 @@ void rr_on_quantum_expired(ProcessManager* pm, PCB* process) {
     process->state = READY;
     pm->ready_queue[pm->ready_count++] = process;
     
-    printf("\n[Debug] RR: Quantum expirado para processo %d", process->pid);
-    printf("\n[Debug] RR: Processo %d movido para o fim da fila", process->pid);
-    printf("\n - Fila atual: %d processos", pm->ready_count);
+    // printf("\n[Debug] RR: Quantum expirado para processo %d", process->pid);
+    // printf("\n[Debug] RR: Processo %d movido para o fim da fila", process->pid);
+    //printf("\n - Fila atual: %d processos", pm->ready_count);
 }
 
 void rr_on_process_complete(ProcessManager* pm, PCB* process) {
