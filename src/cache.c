@@ -1,6 +1,7 @@
 #include "cache.h"
 #include <string.h>
 
+unsigned long long current_cycle = 0;
 CacheEntry cache[CACHE_SIZE];
 CacheAccess access_history[MAX_ACCESS_HISTORY];
 int access_count = 0;
@@ -25,14 +26,16 @@ void set_cache_enabled(bool enabled) {
 }
 
 void init_cache(void) {
+    current_cycle = 0;
     for(int i = 0; i < CACHE_SIZE; i++) {
         cache[i].tag = 0;
         cache[i].data = NULL;
-        cache[i].last_used = 0;
+        cache[i].last_used = time(NULL);
         cache[i].valid = false;
         cache[i].dirty = false;
         cache[i].hits = 0;
         cache[i].misses = 0;
+        cache[i].last_used_cycle = 0;
         cache[i].hit_ratio = 0.0f;
         cache[i].history_index = 0;
         cache[i].temporal_locality_score = 0.0f;
@@ -48,6 +51,7 @@ void init_cache(void) {
 }
 
 bool check_cache(unsigned int address, char* current_instruction) {
+    current_cycle++;
     if (!cache_enabled) {
         return false;
     }
@@ -55,6 +59,8 @@ bool check_cache(unsigned int address, char* current_instruction) {
     unsigned idx = address % CACHE_SIZE;
     bool is_hit = cache[idx].valid && cache[idx].tag == address;
     bool was_prefetched = cache[idx].prefetched;
+
+    cache[idx].last_used_cycle = current_cycle;
 
     printf("\n═══════════ Acesso à Cache ═══════════");
     printf("\n┌── Endereço: %u", address);
@@ -77,6 +83,7 @@ bool check_cache(unsigned int address, char* current_instruction) {
 
     // Atualizar estatísticas e mostrar resultado
     if(is_hit) {
+        cache[idx].last_used_cycle = current_cycle;
         cache[idx].hits++;
         if(was_prefetched) {
             cache[idx].prefetch_hits++;
@@ -241,54 +248,68 @@ void print_cache_statistics(void) {
 }
 
 
-int find_lru_entry(void) {
-    int lru_index = 0;
-    time_t min_access = cache[0].last_access;  // Usar last_access em vez de last_used
+unsigned int find_lru_entry(void) {
+    unsigned int lru_index = 0;
+    unsigned long long oldest_cycle = cache[0].last_used_cycle;
     
-    for(int i = 1; i < CACHE_SIZE; i++) {
-        if(!cache[i].valid) {  // Primeiro procurar entrada vazia
+    for(unsigned int i = 1; i < CACHE_SIZE; i++) {
+        if(!cache[i].valid) {
             return i;
         }
-        if(cache[i].last_access < min_access) {
-            min_access = cache[i].last_access;
+        if(cache[i].last_used_cycle < oldest_cycle) {
+            oldest_cycle = cache[i].last_used_cycle;
             lru_index = i;
         }
     }
+
+    unsigned long long age = current_cycle - cache[lru_index].last_used_cycle;
+    
+    printf("\n║ │   └── LRU: BLOCO %u substituído (idade: %llu intruções)║",
+           lru_index, age);
+    
     return lru_index;
 }
 
 void update_cache(unsigned int address, char* data) {
     if (!cache_enabled) return;
-
-    unsigned idx = address % CACHE_SIZE;
+    
+    unsigned int idx = address % CACHE_SIZE;
+    
+    // Incrementar idade de todos os blocos antes da atualização
+    for(unsigned int i = 0; i < CACHE_SIZE; i++) {
+        if(cache[i].valid && i != idx) {
+            cache[i].age++;
+        }
+    }
 
     printf("\n╔═══════════ Atualização de Bloco ═══════════╗");
-    printf("\n║ Endereço: 0x%04X → Bloco %d              ║",
+    printf("\n║ Endereço: 0x%04X → Bloco %u              ║",
            address, idx);
 
     if(cache[idx].valid && cache[idx].tag != address) {
         cache[idx].misses++;
-        int lru_idx = find_lru_entry();
+        unsigned int lru_idx = find_lru_entry();
+        
         printf("\n║ ├── Conflito detectado                     ║");
         printf("\n║ │   ├── Tag antiga: 0x%04X                ║",
                cache[idx].tag);
         printf("\n║ │   └── Nova tag: 0x%04X                  ║",
                address);
-        printf("\n║ │   └── LRU: BLOCO %d substituído (idade: %d ciclos)║",
-               lru_idx, cache[lru_idx].age);
+        cache[lru_idx].last_used_cycle = current_cycle;
     }
 
-    // Atualizar estatísticas
+    // Reset da idade do bloco atualizado
+    cache[idx].age = 0;
+    cache[idx].last_used = time(NULL);
     cache[idx].tag = address;
     cache[idx].data = data;
     cache[idx].valid = true;
     cache[idx].access_count++;
-    cache[idx].last_access = time(NULL);
 
     printf("\n║ └── Estado após atualização                ║");
-    printf("\n║     ├── Acessos: %-4d                     ║",
+    printf("\n║     ├── Acessos: %-4u                     ║",
            cache[idx].access_count);
-    printf("\n║     ├── Hits: %-4d                        ║",
+    printf("\n║     ├── Hits: %-4u                        ║",
            cache[idx].hits);
     printf("\n║     └── Hit Ratio: %.1f%%                 ║",
            cache[idx].hit_ratio * 100);
@@ -300,17 +321,10 @@ void update_cache(unsigned int address, char* data) {
                             (cache[idx].hits + cache[idx].misses);
     }
 
-    // Envelhecer outros blocos
-    for(unsigned int i = 0; i < CACHE_SIZE; i++) {
-        if(i != idx && cache[i].valid) {
-            cache[i].age++;
-        }
-    }
-
     print_cache_state();
-
-
 }
+
+
 float calculate_cache_efficiency(int index) {
     if(cache[index].hits + cache[index].misses == 0) {
         return 0.0f;

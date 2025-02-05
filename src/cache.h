@@ -6,7 +6,7 @@
 #include <math.h>
 #include <time.h>
 
-#define CACHE_SIZE  24     // Aumentar para 64 ou 128 para mais entradas
+#define CACHE_SIZE  64     // Aumentar para 64 ou 128 para mais entradas
 #define MISS_PENALTY 20        // Aumentar para 20 para mostrar mais impacto
 #define MAX_ACCESS_HISTORY 200 // Ok para histórico maior
 #define MAX_PATTERNS 16         // Aumentar para detectar mais padrões
@@ -57,7 +57,10 @@ typedef struct {
    int prefetch_hits;
    float prefetch_accuracy;
    char* current_instruction;
+    unsigned long long last_used_cycle;
 } CacheEntry;
+
+extern unsigned long long current_cycle;
 
 // Adicione às funções declaradas
 float calculate_instruction_similarity(const char* instr1, const char* instr2);
@@ -70,7 +73,7 @@ void print_cache_state(void);
 float calculate_cache_efficiency(int index);
 
 // Funções de análise
-int find_lru_entry(void);
+unsigned int find_lru_entry(void);
 
 // Novas funções para prefetch
 void prefetch_block(unsigned int base_address, int distance);
