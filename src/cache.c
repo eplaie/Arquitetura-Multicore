@@ -161,7 +161,6 @@ void prefetch_block(unsigned int base_address, int distance) {
 
     // Calcular próximos endereços sequencialmente
     for(int i = 1; i <= distance; i++) {
-        // Agora vamos incrementar apenas em 1 unidade, não em BLOCK_SIZE
         unsigned int next_address = base_address + i;
         int idx = next_address % CACHE_SIZE;
         
@@ -203,7 +202,7 @@ int estimate_loop_size(char* content __attribute__((unused)), char* loop_start) 
             curr++;
         }
     }
-    return count > 0 ? count : 2;  // Mínimo de 2 blocos para LOOP
+    return count > 0 ? count : 2;  
 }
 
 void print_cache_statistics(void) {
@@ -349,7 +348,7 @@ void analyze_instruction_pattern(char* content, unsigned int address) {
     static bool address_processed[MAX_PROCESSES] = {false};
     
     if (address_processed[address / CACHE_SIZE]) {
-        return;  // Já processou este endereço
+        return;  
     }
     
     for(int i = 0; i < MAX_PATTERNS; i++) {
@@ -362,7 +361,7 @@ void analyze_instruction_pattern(char* content, unsigned int address) {
             
             if(prefix_check && suffix_check) {
                 known_patterns[i].frequency++;
-                break;  // Contar apenas uma vez por padrão
+                break;  
             }
             
             match = strstr(match + pattern_len, known_patterns[i].pattern);

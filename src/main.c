@@ -47,7 +47,7 @@ int main(void) {
     peripherals* p = malloc(sizeof(peripherals));
     architecture_state* arch_state = malloc(sizeof(architecture_state));
 
-    // 1. Primeiro inicializar o Process Manager
+    // 1. inicializa o Process Manager
     ProcessManager* pm = init_process_manager(DEFAULT_QUANTUM);
     if (!pm) {
         printf("\n[Sistema] ERRO: Falha ao inicializar Process Manager");
@@ -220,10 +220,10 @@ for (int core_id = 0; core_id < NUM_CORES; core_id++) {
         for (int i = 0; i < NUM_CORES; i++) {
             cpu->core[i].running = false;
         }
-        usleep(100000); // Dar tempo para threads finalizarem
+        usleep(100000); 
     }
 
-    // Limpeza final
+    
     // printf("[Sistema] Liberando recursos\n");
     free_architecture(cpu, memory_ram, memory_disc, p, arch_state, cycle_count);
 
