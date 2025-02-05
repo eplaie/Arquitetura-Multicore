@@ -234,13 +234,11 @@ void print_cache_statistics(void) {
 
     // Análise de ciclos
     int ciclos_salvos = total_hits * (MISS_PENALTY - 1);
-    int ciclos_perdidos = total_misses * MISS_PENALTY;
 
     printf("\n║                                       ║");
     printf("\n║ Impacto no Desempenho                 ║");
     printf("\n╠═══════════════════════════════════════╣");
-    printf("\n║ ├── Ciclos Economizados: %-6d       ║", ciclos_salvos);
-    printf("\n║ ├── Ciclos Perdidos: %-6d           ║", ciclos_perdidos);
+    printf("\n║ ├── Pontuação Economizada: %-6d       ║", ciclos_salvos);
     printf("\n║ └── Speedup: %.2fx                    ║",
            get_speedup_ratio());
 
