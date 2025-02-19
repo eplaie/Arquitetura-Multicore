@@ -2,6 +2,7 @@
 
 TLBEntry tlb[TLB_SIZE];
 
+
 // Converte PID para binário
 char* convert_pid_to_binary(int pid) {
     char* binary = (char*)malloc(33); // 32 bits + terminador nulo
