@@ -21,6 +21,13 @@ PCB* create_pcb(void) {
     }
 
     pcb->pid = total_processes;
+    insert_pid_in_tlb(pcb->pid);
+
+    char* binary_pid = lookup_pid_in_tlb(pcb->pid);
+    if (binary_pid) {
+        printf("[Sistema] Processo %d criado (PID Binário: %s)\n", pcb->pid, binary_pid);
+    }
+
     pcb->state = NEW;
     pcb->core_id = -1;
     pcb->PC = 0;

@@ -7,6 +7,7 @@
 #include "cpu.h" 
 #include "ram.h"
 #include "policies/policy.h"
+#include "tlb.h"
 
 typedef enum {
     NEW,

@@ -29,7 +29,7 @@ void show_policy_menu(void) {
     printf("\n%s║%s  [1] %-35s%s║%s", COLOR_BLUE, COLOR_YELLOW, "Round Robin (RR)", COLOR_BLUE, COLOR_RESET);
     printf("\n%s║%s  [2] %-35s%s║%s", COLOR_BLUE, COLOR_YELLOW, "Shortest Job First (SJF)", COLOR_BLUE, COLOR_RESET);
     printf("\n%s║%s  [3] %-35s%s║%s", COLOR_BLUE, COLOR_YELLOW, "Lottery Scheduling", COLOR_BLUE, COLOR_RESET);
-    printf("\n%s║%s  [4] %-35s%s║%s", COLOR_BLUE, COLOR_YELLOW, "Cache-Aware Scheduling NEW - USAR ESSE COM A CACHE", COLOR_BLUE, COLOR_RESET);
+    printf("\n%s║%s  [4] %-35s%s║%s", COLOR_BLUE, COLOR_YELLOW, "Cache-Aware Scheduling", COLOR_BLUE, COLOR_RESET);
     printf("\n%s║                                           ║%s", COLOR_BLUE, COLOR_RESET);
     printf("\n%s╚═══════════════════════════════════════════╝%s", COLOR_BLUE, COLOR_RESET);
     printf("\n%sEscolha uma opção (1-4):%s ", COLOR_CYAN, COLOR_RESET);

@@ -6,12 +6,12 @@
 #include <math.h>
 #include <time.h>
 
-#define CACHE_SIZE  32     
-#define MISS_PENALTY 20        
-#define MAX_ACCESS_HISTORY 200 
-#define MAX_PATTERNS 16        
-#define MAX_PATTERN_LENGTH 100 
-#define BLOCK_SIZE 64         
+#define CACHE_SIZE 1024   // Aumentar para 64 ou 128 para mais entradas
+#define MISS_PENALTY 20        // Aumentar para 20 para mostrar mais impacto
+#define MAX_ACCESS_HISTORY 200 // Ok para histórico maior
+#define MAX_PATTERNS 16         // Aumentar para detectar mais padrões
+#define MAX_PATTERN_LENGTH 100 // Aumentar para padrões maiores
+#define BLOCK_SIZE 64         // Ok para o tamanho atual
 
 
 extern bool cache_enabled;
@@ -52,16 +52,14 @@ typedef struct {
    float temporal_locality_score;
    float spatial_locality_score;
    
-   //para prefetch
+   // Novos campos para prefetch
    bool prefetched;
    int prefetch_hits;
    float prefetch_accuracy;
    char* current_instruction;
-    unsigned long long last_used_cycle;
 } CacheEntry;
 
-extern unsigned long long current_cycle;
-
+// Adicione às funções declaradas
 float calculate_instruction_similarity(const char* instr1, const char* instr2);
 
 // Funções principais
@@ -72,8 +70,9 @@ void print_cache_state(void);
 float calculate_cache_efficiency(int index);
 
 // Funções de análise
-unsigned int find_lru_entry(void);
+int find_lru_entry(void);
 
+// Novas funções para prefetch
 void prefetch_block(unsigned int base_address, int distance);
 int estimate_loop_size(char* content, char* loop_start);
 void analyze_instruction_pattern(char* content, unsigned int address);
@@ -87,6 +86,6 @@ extern int access_count;
 
 // Na lista de funções
 void set_cache_enabled(bool enabled);
-float get_speedup_ratio(void);  
+float get_speedup_ratio(void);  // Para calcular o ganho de performance
 
 #endif

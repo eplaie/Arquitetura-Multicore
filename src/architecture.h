@@ -11,8 +11,8 @@
 #include "ram.h"  
 #include "architecture_state.h"
 
-#define DEFAULT_QUANTUM 12
-#define MAX_CYCLES 7
+#define DEFAULT_QUANTUM 5
+#define MAX_CYCLES 40
 
 // Funções principais 
 void init_architecture(cpu* cpu, ram* memory_ram, disc* memory_disc, 

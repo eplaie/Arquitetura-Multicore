@@ -29,6 +29,13 @@ typedef struct Policy {
     void (*on_process_complete)(struct ProcessManager* pm, PCB* process);
 } Policy;
 
+typedef struct {
+    char* binary_pid;
+    PCB* process;
+} BinaryPIDMapping;
+
+
+
 // Funções de criação de políticas
 Policy* create_rr_policy(void);
 Policy* create_sjf_policy(void);

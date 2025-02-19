@@ -6,6 +6,9 @@
 #include "ram.h"
 #include "policies/policy.h"
 #include "policies/policy_selector.h"
+#include <time.h>
+#include <sys/time.h>
+// #include "tlb.h"
 
 
 void clean_ready_queue(ProcessManager* pm) {
@@ -30,7 +33,9 @@ void init_system(void) {
 }
 
 int main(void) {
+
     init_system();
+    init_process_tlb();
 
     // Inicialização dos componentes
     cpu* cpu = malloc(sizeof(cpu));
@@ -47,7 +52,7 @@ int main(void) {
     peripherals* p = malloc(sizeof(peripherals));
     architecture_state* arch_state = malloc(sizeof(architecture_state));
 
-    // 1. inicializa o Process Manager
+    // 1. Primeiro inicializar o Process Manager
     ProcessManager* pm = init_process_manager(DEFAULT_QUANTUM);
     if (!pm) {
         printf("\n[Sistema] ERRO: Falha ao inicializar Process Manager");
@@ -61,9 +66,9 @@ int main(void) {
 
     init_cache();
 
-        printf("\n╔════════ Configuração de Cache ════════╗");
-        printf("\n║  Deseja utilizar cache? (s/n):        ║");
-        printf("\n╚═══════════════════════════════════════╝");
+        printf("\n╔════════ Configuração de Cache ═══════════════════════════════════════════  ╗");
+        printf("\n║  Deseja utilizar cache? (s/n):  Para o MMU  -   sem utilizar a cache       ║");
+        printf("\n╚═══════════════════════════════════════ ═══════════════════════════════════ ╝");
         printf("\nEscolha: ");
         char use_cache;
         scanf(" %c", &use_cache);
@@ -86,6 +91,8 @@ int main(void) {
         exit(1);
     }
 
+    clock_t start = clock();
+
     if (!cpu->process_manager) {
         printf("\n[Sistema] ERRO: Process manager nulo após inicialização");
         exit(1);
@@ -99,8 +106,8 @@ int main(void) {
     int num_programs = sizeof(program_files) / sizeof(program_files[0]);
     unsigned int base_address;
     char* program;
-
     for (int i = 0; i < num_programs; i++) {
+
         char filename[100];
         snprintf(filename, sizeof(filename), "dataset/%s", program_files[i]);
 
@@ -118,6 +125,7 @@ int main(void) {
             show_process_state(process->pid, "CREATED", "READY");
             free(program);
         }
+        print_tlb_contents();
     }
 
     show_scheduler_state(cpu->process_manager->ready_count, 0);
@@ -142,7 +150,8 @@ int main(void) {
     cycle_count++;
     cpu->process_manager->current_time = cycle_count;
     show_cycle_start(cycle_count);
-    
+
+
     // Escalonar processos para cores disponíveis
 for (int core_id = 0; core_id < NUM_CORES; core_id++) {
     if (cpu->core[core_id].is_available && 
@@ -153,7 +162,6 @@ for (int core_id = 0; core_id < NUM_CORES; core_id++) {
         schedule_next_process(cpu, core_id);
     }
 }
-
     // Executar processos nos cores
     int running_count = 0;
     for (int core_id = 0; core_id < NUM_CORES; core_id++) {
@@ -220,13 +228,16 @@ for (int core_id = 0; core_id < NUM_CORES; core_id++) {
         for (int i = 0; i < NUM_CORES; i++) {
             cpu->core[i].running = false;
         }
-        usleep(100000); 
+        usleep(100000); // Dar tempo para threads finalizarem
     }
 
-    
+    // Limpeza final
     // printf("[Sistema] Liberando recursos\n");
+    free_process_tlb();
     free_architecture(cpu, memory_ram, memory_disc, p, arch_state, cycle_count);
-
+    clock_t end = clock();
+    double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("Tempo de execução: %f segundos\n", cpu_time_used);
     printf("[Sistema] Execução finalizada\n");
     return 0;
 }
