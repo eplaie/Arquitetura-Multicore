@@ -6,7 +6,7 @@
 #define MAX_GROUPS 10
 
 typedef struct {
-    PCB* processes[MAX_PROCESSES];  // MAX_PROCESSES já definido em common_types.h
+    PCB* processes[MAX_PROCESSES];  
     int count;
     float similarity_score;
 } ProcessGroup;
